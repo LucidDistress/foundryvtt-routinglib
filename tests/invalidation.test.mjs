@@ -31,4 +31,12 @@ test('hooks scope wall changes to active scene and invalidate dotted grid update
  hooks.get('updateScene')({id:'active'},{grid:{type:1}});assert.equal(calls.invalidate,2);
  setting.onChange();assert.equal(calls.wipe,4);
  canvas.ready=false;setting.onChange();assert.equal(calls.wipe,4);
+ hooks.get('updateToken')({parent:{id:'other'}},{level:'upper'});assert.equal(calls.invalidate,2);
+ hooks.get('updateToken')({parent:{id:'active'}},{x:50,y:50});assert.equal(calls.invalidate,2);
+ for(const changes of [{level:'upper'},{depth:2},{'flags.wall-height.height':20}])hooks.get('updateToken')({parent:{id:'active'}},changes);
+ assert.equal(calls.invalidate,5);
+ for(const event of ['createLevel','updateLevel','deleteLevel'])hooks.get(event)({parent:{id:'other'}});
+ assert.equal(calls.invalidate,5);
+ for(const event of ['createLevel','updateLevel','deleteLevel'])hooks.get(event)({parent:{id:'active'}});
+ assert.equal(calls.invalidate,8);
 });

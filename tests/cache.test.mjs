@@ -25,7 +25,9 @@ test('different sizes, exact elevations and hex snapping cannot share cached nod
  const cache=new cacheModule.GriddedCache();
  const first=node(cache,token());
  assert.equal(node(cache,token()),first);
- for(const data of [token({width:3,height:3}),token({width:.5,height:.5}),token({elevation:5}),token({altOrientation:true}),token({hexSizeSupport:{altSnappingFlag:true,borderSize:2}})])assert.notEqual(node(cache,data),first);
+ const a={},b={};assert.notEqual(node(cache,token({token:a})),node(cache,token({token:b})));
+ assert.equal(node(cache,token({token:a})),node(cache,token({token:a})));
+ for(const data of [token({width:3,height:3}),token({width:.5,height:.5}),token({elevation:5}),token({altOrientation:true}),token({level:"upper"}),token({depth:2}),token({shape:1}),token({token:{}}),token({hexSizeSupport:{altSnappingFlag:true,borderSize:2}})])assert.notEqual(node(cache,data),first);
  assert.equal(node(cache,token({elevation:10})).neighbors.length,0);
  assert.equal(node(cache,token({elevation:10.001})).neighbors.length,2);
  assert.equal(node(cache,token({elevation:9.999})).neighbors.length,2);

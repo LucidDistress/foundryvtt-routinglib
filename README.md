@@ -132,3 +132,15 @@ WASM loaded. If its assets are missing or fail to initialize, the gridded API st
 loads and gridless requests fail with an explicit error. Install a complete release
 and reload Foundry to restore gridless support. `calculatePath` reports invalid
 requests as rejected promises; `calculatePathBlocking` throws synchronously.
+
+### Native levels and wall checks (development)
+
+On v14, gridded token queries use the token's own level and native movement height.
+Tokenless queries default to the viewed level; pass `level: "levelDocumentId"` to
+select a different level in the active scene. A token query cannot override its
+level. Missing levels and collision backend failures are reported as errors.
+Relevant token dimension/elevation/level edits and native level changes invalidate
+pending requests with `null`, allowing callers to request a new route.
+
+These are same-level wall checks. Region movement rules, vertical travel, full
+footprint clearance and native gridless level support are not implemented yet.

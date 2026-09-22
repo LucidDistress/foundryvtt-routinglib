@@ -50,6 +50,8 @@ class Cache {
 export class GriddedCache extends Cache {
 	reset() {
 		super.reset();
+		this.tokenKeys = new WeakMap();
+		this.nextTokenKey = 0;
 		if (canvas.grid.isHexagonal && canvas.grid.columns) {
 			this.gridWidth = Math.ceil(canvas.dimensions.width / ((3 / 4) * canvas.grid.sizeX));
 		} else {
@@ -81,7 +83,13 @@ export class GriddedCache extends Cache {
 		}
 		// Snap parity alone is insufficient: a 1x1, 3x3 and fractional token
 		// can have different collision/snap behavior despite sharing that parity.
-		const key = JSON.stringify([sizeIndex, tokenData.width, tokenData.height,
+		let tokenKey = null;
+		if (tokenData.token) {
+			if (!this.tokenKeys.has(tokenData.token)) this.tokenKeys.set(tokenData.token, ++this.nextTokenKey);
+			tokenKey = this.tokenKeys.get(tokenData.token);
+		}
+		const key = JSON.stringify([tokenKey, tokenData.level ?? null, tokenData.depth ?? null,
+			tokenData.shape ?? null, sizeIndex, tokenData.width, tokenData.height,
 			tokenData.elevation, tokenData.size ?? null, tokenData.altOrientation ?? false,
 			tokenData.hexSizeSupport?.altSnappingFlag ?? false,
 			tokenData.hexSizeSupport?.borderSize ?? null,
@@ -156,11 +164,36 @@ export function stepCollidesWithWall(from, to, tokenData, adjustPos = false) {
 	} else {
 		adjustedStart = stepStart;
 	}
-	adjustedStart.t = adjustedStart.b = tokenData.elevation;
-	const source = new CONFIG.Canvas.visionSourceClass({});
-	return CONFIG.Canvas.polygonBackends.move.testCollision(adjustedStart, stepEnd, {
-		mode: "any",
-		type: "move",
-		source,
-	});
+	const token = tokenData.token;
+	const nativeLevels = canvas.scene?.levels;
+	const level = nativeLevels?.get(tokenData.level);
+	if (nativeLevels && !level) throw new Error("RoutingLib collision level no longer exists.");
+	let elevation = tokenData.elevation;
+	if (token?.document.getMovementOrigin) {
+		// v14 tests movement at the token's vertical center, not its feet.
+		elevation = token.document.getMovementOrigin({x: 0, y: 0,
+			elevation, width: tokenData.width, height: tokenData.height,
+			depth: tokenData.depth, shape: tokenData.shape}).elevation;
+	}
+	const origin = {...adjustedStart, elevation};
+	const destination = {...stepEnd, elevation};
+	if (token) {
+		const currentLevel = token.document._source?.level ?? token.document.level;
+		if (nativeLevels && currentLevel !== tokenData.level) {
+			throw new Error("RoutingLib token level changed during the request.");
+		}
+		// Foundry supplies the movement source and handles doors, wall directions,
+		// elevation and the token's level. Never turn a collision error into a pass.
+		return token.checkCollision(destination, {origin, type: "move", mode: "any"});
+	}
+	// Tokenless callers still need a movement source, and on v14 a concrete level.
+	const source = new foundry.canvas.sources.PointMovementSource({});
+	try {
+		source.initialize({...origin, ...(level ? {level: level.id} : {})});
+		return CONFIG.Canvas.polygonBackends.move.testCollision(origin, destination, {
+			mode: "any", type: "move", source, ...(level ? {level} : {})
+		});
+	} finally {
+		source.destroy();
+	}
 }

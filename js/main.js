@@ -26,10 +26,15 @@ function initializePathfinder(from, to, options) {
 	let tokenData;
 
 	if (token) {
-		tokenData = {width: token.document.width, height: token.document.height};
+		if (token.scene?.id !== undefined && token.scene.id !== canvas.scene.id) {
+			throw new Error("RoutingLib token must belong to the active scene.");
+		}
+		tokenData = {width: token.document.width, height: token.document.height, token,
+			depth: token.document._source?.depth ?? token.document.depth,
+			shape: token.document._source?.shape ?? token.document.shape};
 		if (elevation == null) {
 			elevation =
-				isModuleActive("wall-height") && token.losHeight != null
+				!canvas.scene.levels && isModuleActive("wall-height") && token.losHeight != null
 					? token.losHeight
 					: token.document.elevation;
 		}
@@ -51,6 +56,15 @@ function initializePathfinder(from, to, options) {
 		throw new RangeError("Token dimensions must be finite positive numbers.");
 	}
 	tokenData.elevation = elevation;
+	// A token route always belongs to its own level, even when the GM views another.
+	const tokenLevel = token?.document._source?.level ?? token?.document.level;
+	tokenData.level = token ? tokenLevel : (options.level ?? canvas.level?.id);
+	if (canvas.scene.levels && !canvas.scene.levels.get(tokenData.level)) {
+		throw new Error("RoutingLib requires a valid native scene level.");
+	}
+	if (token && options.level != null && options.level !== tokenLevel) {
+		throw new Error("RoutingLib cannot route a token on a different level.");
+	}
 
 	const levelIndex = cache.getLevelIndexForElevation(elevation);
 	if (canvas.grid.type === CONST.GRID_TYPES.GRIDLESS) {
@@ -138,6 +152,23 @@ function initializeIfReady() {
 	Hooks.on("createWall", onWallChange);
 	Hooks.on("updateWall", onWallChange);
 	Hooks.on("deleteWall", onWallChange);
+	// Requests contain a snapshot of the token's dimensions and level. Do not
+	// resume them with a changed document and stale collision context.
+	Hooks.on("updateToken", (token, changes) => {
+		if (token.parent?.id !== canvas.scene?.id) return;
+		const fields = ["width", "height", "depth", "shape", "elevation", "level", "flags"];
+		if (Object.keys(changes).some(key => fields.includes(key.split(".")[0]))) {
+			invalidateJobs();
+			initializeCaches();
+		}
+	});
+	for (const event of ["createLevel", "updateLevel", "deleteLevel"]) {
+		Hooks.on(event, level => {
+			if (level.parent?.id !== canvas.scene?.id) return;
+			invalidateJobs();
+			initializeCaches();
+		});
+	}
 	Hooks.on("updateScene", (scene, changes) => {
 		if (scene.id !== canvas.scene?.id) return;
 		if (Object.keys(changes).some(key => ["grid", "width", "height", "padding"].includes(key.split(".")[0]))) {

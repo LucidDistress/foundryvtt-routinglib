@@ -24,14 +24,14 @@ until a release is actually built and published in this fork.
   absent optional localization files correctly when packaging.
 
 ## Remaining before release
-- Integrate native v14 movement levels, region restrictions/costs, and token shapes.
-  Current collision changes only modernize the source constructor; they do not
-  establish v14 movement compatibility.
+- Integrate region restrictions/costs and token footprints; gridded wall checks now
+  delegate to native token collision with level and movement-height context.
+  This does not yet establish full v14 movement compatibility.
 - Verify diagonal rules in Foundry after the isolated distance regression suite.
 - Rebuild/fix Rust gridless exact-boundary costs; scene-unit conversion is implemented as an opt-in compatibility option.
 - Test hex token sizes/orientations, narrow passages, one-way walls, doors,
   scene switching, and Rideable in Foundry.
-- Integrate native level identity into movement checks; exact size/elevation cache identity is covered by isolated tests.
+- Extend native level/directional-wall handling to the Rust gridless engine.
 - Rebuild WASM and inspect the final release archive; no generated binary is borrowed
   from another fork. Rust/wasm-pack must be installed to perform that build.
 - Update release version/URLs and verified core only after runtime validation.
@@ -91,3 +91,26 @@ caches are cleared on geometry changes and scene transitions.
 
 Startup tests simulate missing assets, binding delegation, ready ordering, request
 validation and teardown. Actual WASM compilation and live Foundry remain pending.
+
+## Batch 5: native gridded wall collision
+- Delegate token queries to Token.checkCollision in the direction of travel, using
+  explicit origin, destination, movement type and token movement-origin elevation.
+- Use the token's own native level, not the GM's viewed level; reject missing/stale
+  levels and tokens belonging to another scene.
+- Use PointMovementSource for tokenless queries and destroy it after each check.
+- Partition caches by token object identity, level, depth and shape as well as size
+  and elevation. Invalidate requests on relevant token edits and level changes.
+- Preserve square/hex routing coordinate conventions; full token-footprint clearance
+  and native shape positioning still need integration tests and further work.
+- On v14 use the native movement origin rather than the legacy wall-height sight height.
+
+Verified API behavior against the installed v14 Token.checkCollision,
+TokenDocument.getMovementOrigin and movement polygon source. New tests simulate
+native collision responses to verify argument forwarding, level isolation, direction,
+errors, cleanup and invalidation; no live scene movement was performed.
+
+Scope: square/hex wall queries only. This does not add vertical routes between levels,
+region movement rules, or native level support to the Rust gridless engine.
+References:
+- https://foundryvtt.com/api/classes/foundry.canvas.placeables.Token.html#checkCollision
+- https://foundryvtt.com/api/classes/foundry.canvas.sources.PointMovementSource.html
