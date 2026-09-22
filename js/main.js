@@ -44,6 +44,10 @@ function initializePathfinder(from, to, options) {
 		}
 	}
 
+	if (!Number.isFinite(elevation)) throw new RangeError("Elevation must be finite.");
+	if (![tokenData.width, tokenData.height].every(size => Number.isFinite(size) && size > 0)) {
+		throw new RangeError("Token dimensions must be finite positive numbers.");
+	}
 	tokenData.elevation = elevation;
 
 	const levelIndex = cache.getLevelIndexForElevation(elevation);
@@ -86,8 +90,8 @@ Hooks.once("init", async () => {
 		type: Number,
 		default: 0.9,
 		onChange: () => {
-			if (canvas.grid.type === CONST.GRID_TYPES.GRIDLESS) {
-				cache.reset();
+			if (canvas?.ready && canvas.grid.type === CONST.GRID_TYPES.GRIDLESS) {
+				wipeCaches();
 			}
 		},
 	});
@@ -114,12 +118,15 @@ function initializeIfReady() {
 		disposeCaches();
 	});
 	Hooks.on("canvasReady", initializeCaches);
-	Hooks.on("createWall", wipeCaches);
-	Hooks.on("updateWall", wipeCaches);
-	Hooks.on("deleteWall", wipeCaches);
+	const onWallChange = wall => {
+		if (wall.parent?.id === canvas.scene?.id) wipeCaches();
+	};
+	Hooks.on("createWall", onWallChange);
+	Hooks.on("updateWall", onWallChange);
+	Hooks.on("deleteWall", onWallChange);
 	Hooks.on("updateScene", (scene, changes) => {
 		if (scene.id !== canvas.scene?.id) return;
-		if (["grid", "width", "height", "padding"].some(key => key in changes)) {
+		if (Object.keys(changes).some(key => ["grid", "width", "height", "padding"].includes(key.split(".")[0]))) {
 			invalidateJobs();
 			initializeCaches();
 		}

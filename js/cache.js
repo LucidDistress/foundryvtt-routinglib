@@ -36,33 +36,15 @@ class Cache {
 
 	reset() {
 		this.dispose();
-		this.levelIndexes = detectLevels();
-		this.graphs = [];
+		this.graphs = new Map();
 	}
 
 	getLevelIndexForElevation(elevation) {
-		let start = 0;
-		let end = this.levelIndexes.length;
-		// Bisect levelindexes to find the correct index for the current elevation
-		while (start !== end) {
-			const center = (start + end) >> 1; // Integer division by 2
-			const border = this.levelIndexes[center];
-			if (elevation == border.elevation) {
-				if (border.isTop) {
-					start = center - 1;
-					end = center - 1;
-				} else {
-					start = center;
-					end = center;
-				}
-			} else if (elevation < border.elevation) {
-				end = center;
-			} else {
-				start = center + 1;
-			}
-		}
-		return start;
+		// Exact elevations avoid sharing a graph at inclusive wall-height boundaries.
+		if (!Number.isFinite(elevation)) throw new RangeError("Elevation must be finite.");
+		return elevation;
 	}
+
 }
 
 export class GriddedCache extends Cache {
@@ -93,17 +75,21 @@ export class GriddedCache extends Cache {
 	}
 
 	getInitializedNode(pos, sizeIndex, levelIndex, tokenData) {
-		let sizeGraphs = this.graphs[sizeIndex];
-		if (!sizeGraphs) {
-			sizeGraphs = [];
-			this.graphs[sizeIndex] = sizeGraphs;
+		if (!Number.isInteger(pos.x) || !Number.isInteger(pos.y)
+			|| pos.x < 0 || pos.y < 0 || pos.x >= this.gridWidth || pos.y >= this.gridHeight) {
+			throw new RangeError("Grid coordinates must be integer cells inside the canvas.");
 		}
-		let graph = sizeGraphs[levelIndex];
-		if (!graph) {
-			graph = this.makeEmptyGraph();
-			sizeGraphs[levelIndex] = graph;
-		}
-		let node = graph[pos.y][pos.x];
+		// Snap parity alone is insufficient: a 1x1, 3x3 and fractional token
+		// can have different collision/snap behavior despite sharing that parity.
+		const key = JSON.stringify([sizeIndex, tokenData.width, tokenData.height,
+			tokenData.elevation, tokenData.size ?? null, tokenData.altOrientation ?? false,
+			tokenData.hexSizeSupport?.altSnappingFlag ?? false,
+			tokenData.hexSizeSupport?.borderSize ?? null,
+			tokenData.hexSizeSupport?.altOrientationFlag ?? false]);
+		let graph = this.graphs.get(key);
+		if (!graph) this.graphs.set(key, graph = new Map());
+		const positionKey = `${pos.x},${pos.y}`;
+		let node = graph.get(positionKey);
 		if (!node) {
 			const neighbors = [];
 			for (const neighborPos of canvas.grid.getAdjacentOffsets({i: pos.y, j: pos.x}).map(({i: y, j: x}) => {
@@ -127,97 +113,32 @@ export class GriddedCache extends Cache {
 			}
 			node = {...pos, neighbors};
 
-			graph[pos.y][pos.x] = node;
+			graph.set(positionKey, node);
 		}
 		return node;
 	}
 
-	makeEmptyGraph() {
-		const graph = new Array(this.gridHeight);
-		for (let y = 0; y < this.gridHeight; y++) {
-			graph[y] = new Array(this.gridWidth);
-		}
-		return graph;
-	}
 }
 
 class GridlessCache extends Cache {
 	dispose() {
-		for (const levels of this.graphs ?? []) {
-			if (levels) for (const graph of levels.values()) GridlessPathfinding.freeGraph(graph);
-		}
+		const graphs = this.graphs;
+		this.graphs = new Map();
+		for (const graph of graphs?.values() ?? []) GridlessPathfinding.freeGraph(graph);
 	}
 
 	getGraphFor(tokenSize, levelIndex, elevation) {
-		let levelGraphs = this.graphs[levelIndex];
-		if (!levelGraphs) {
-			levelGraphs = new Map();
-			this.graphs[levelIndex] = levelGraphs;
-		}
-		let graph = levelGraphs.get(tokenSize);
-		if (!graph) {
-			const tokenCalcSize =
-				tokenSize * canvas.grid.size * game.settings.get("routinglib", "gridlessTokenSizeRatio");
-			const walls = canvas.walls.placeables;
-			const wallHeightEnabled = isModuleActive("wall-height");
+		const ratio = game.settings.get("routinglib", "gridlessTokenSizeRatio");
+		const key = JSON.stringify([tokenSize, elevation, ratio, canvas.grid.size]);
+		let graph = this.graphs.get(key);
+		if (graph === undefined) {
+			const tokenCalcSize = tokenSize * canvas.grid.size * ratio;
 			graph = GridlessPathfinding.initializeGraph(
-				walls,
-				tokenCalcSize,
-				elevation,
-				wallHeightEnabled,
-			);
-			levelGraphs.set(tokenSize, graph);
+				canvas.walls.placeables, tokenCalcSize, elevation, isModuleActive("wall-height"));
+			this.graphs.set(key, graph);
 		}
 		return graph;
 	}
-}
-
-class LevelBorder {
-	constructor(elevation, isTop) {
-		this.elevation = elevation;
-		this.isTop = isTop;
-	}
-}
-
-function detectLevels() {
-	const levelBorders = new Map();
-	levelBorders[-Infinity] = {hasTop: false, hasBottom: true};
-	levelBorders[Infinity] = {hasTop: true, hasBottom: false};
-	const levelBorderElevations = [-Infinity, Infinity];
-	if (isModuleActive("wall-height")) {
-		for (const wall of canvas.walls.placeables) {
-			const wallHeight = wall.document.flags["wall-height"];
-			const top = wallHeight?.top ?? Infinity;
-			const topBorder = levelBorders[top];
-			if (!topBorder) {
-				levelBorders[top] = {hasTop: true, hasBottom: false};
-				levelBorderElevations.push(top);
-			} else {
-				topBorder.hasTop = true;
-			}
-			const bottom = wallHeight?.bottom ?? -Infinity;
-			const bottomBorder = levelBorders[bottom];
-			if (!bottomBorder) {
-				levelBorders[bottom] = {hasTop: false, hasBottom: true};
-				levelBorderElevations.push(bottom);
-			} else {
-				bottomBorder.hasBottom = true;
-			}
-		}
-	}
-	// Levels must be sorted because it will be bisected later
-	levelBorderElevations.sort((a, b) => a - b);
-	const levels = [];
-	for (const elevation of levelBorderElevations) {
-		const border = levelBorders[elevation];
-		if (border.hasBottom) {
-			levels.push(new LevelBorder(elevation, false));
-		}
-		if (border.hasTop) {
-			levels.push(new LevelBorder(elevation, true));
-		}
-	}
-	return levels;
 }
 
 export function stepCollidesWithWall(from, to, tokenData, adjustPos = false) {
