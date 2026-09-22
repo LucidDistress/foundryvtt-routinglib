@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
 
 import json
+import os
+import shutil
 from pathlib import PurePath, Path
 import subprocess
 import tempfile
 import zipfile
 
-wasm_pack = Path("~/.cargo/bin/wasm-pack").expanduser()
+root = Path(__file__).resolve().parent
+os.chdir(root)
+wasm_pack = shutil.which("wasm-pack") or Path("~/.cargo/bin").expanduser() / ("wasm-pack.exe" if os.name == "nt" else "wasm-pack")
+if not Path(wasm_pack).is_file():
+	raise SystemExit("wasm-pack is required to build a release; install the Rust toolchain and wasm-pack first.")
 
 root_files = ["module.json", "README.md", "CHANGELOG.md", "LICENSE"]
 wasm_files = ["gridless_pathfinding_bg.wasm", "gridless_pathfinding.js"]
 output_dir = Path("artifact")
-copy_everything_directories = ["js", "lang"]
+copy_everything_directories = ["js"]
+if (root / "lang").is_dir():
+	copy_everything_directories.append("lang")
 wasm_dir = Path("wasm")
 root_dir = Path(".")
 rust_dir = Path("rust")

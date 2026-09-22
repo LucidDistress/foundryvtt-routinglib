@@ -31,52 +31,54 @@ export function cancelJob(promise) {
 }
 
 export function resetJobs() {
-	for (const job of pathfindingJobs) {
-		job.pathfinder.reset();
+	for (const job of [...pathfindingJobs]) {
+		try { job.pathfinder.reset(); }
+		catch (error) {
+			pathfindingJobs.splice(pathfindingJobs.indexOf(job), 1);
+			try { job.pathfinder.free(); } catch { /* Preserve the reset error. */ }
+			job.reject(error);
+		}
+	}
+}
+
+// Scene changes invalidate the request, rather than rerunning it in another scene.
+export function invalidateJobs() {
+	if (timeout !== null) window.clearTimeout(timeout);
+	timeout = null;
+	for (const job of pathfindingJobs.splice(0)) {
+		try { job.pathfinder.free(); job.resolve(null); }
+		catch (error) { job.reject(error); }
 	}
 }
 
 function scheduleBackgroundTask() {
-	if (!timeout) {
-		asyncPathfindingTask();
+	if (timeout === null && pathfindingJobs.length) {
+		timeout = window.setTimeout(asyncPathfindingTask, 0);
 	}
 }
 
-// TODO This is currently a first come first serve scheduler - maybe a fair scheduler would be better so modules with long running requests don't block modules with short running requests wouldn't block other modules requests
 function asyncPathfindingTask() {
-	const NO_STEPS_PER_ITERATION = 20;
-	const TIME_PER_TASK = 50;
-
 	timeout = null;
-
-	let currentJob = pathfindingJobs[0];
-	let now = Date.now();
-	let endTime = now + TIME_PER_TASK; // TODO Make this dependent on selected frame rate
-	while (now < endTime && pathfindingJobs.length > 0) {
-		let path = undefined;
-		for (let i = 0; i < NO_STEPS_PER_ITERATION; i++) {
-			try {
-				path = currentJob.pathfinder.step();
-			} catch (e) {
-				currentJob.pathfinder.free();
-				currentJob.reject(e);
-				pathfindingJobs.shift();
-				break;
-			}
-			if (path !== undefined) {
-				break;
-			}
+	const deadline = Date.now() + 10;
+	while (pathfindingJobs.length && Date.now() < deadline) {
+		const job = pathfindingJobs[0];
+		let result;
+		let failed = false;
+		let error;
+		try {
+			for (let i = 0; i < 20 && result === undefined; i++) result = job.pathfinder.step();
+			if (result !== undefined && result !== null) result = job.pathfinder.postProcessResult(result);
+		} catch (e) {
+			failed = true;
+			error = e;
 		}
-		if (path !== undefined) {
-			if (path !== null) path = currentJob.pathfinder.postProcessResult(path);
-			currentJob.pathfinder.free();
-			currentJob.resolve(path);
+		if (failed || result !== undefined) {
 			pathfindingJobs.shift();
-			currentJob = pathfindingJobs[0];
+			try { job.pathfinder.free(); }
+			catch (e) { failed = true; error ??= e; }
+			if (failed) job.reject(error);
+			else job.resolve(result);
 		}
-		now = Date.now();
 	}
-	if (pathfindingJobs.length > 0) {
-		timeout = window.setTimeout(asyncPathfindingTask, 0);
-	}
+	scheduleBackgroundTask();
 }

@@ -11,31 +11,33 @@ function getSnapPointForTokenData(x, y, tokenData) {
 	if (canvas.grid.type === CONST.GRID_TYPES.GRIDLESS) {
 		return new PIXI.Point(x, y);
 	}
-	if (canvas.grid.isHex) {
+	if (canvas.grid.isHexagonal) {
 		if (tokenData.hexSizeSupport?.altSnappingFlag) {
 			if (tokenData.hexSizeSupport.borderSize % 2 === 0) {
 				const snapPoint = findVertexSnapPoint(x, y, tokenData.hexSizeSupport.altOrientationFlag);
 				return new PIXI.Point(snapPoint.x, snapPoint.y);
 			} else {
-				return new PIXI.Point(...canvas.grid.getCenter(x, y));
+				const center = canvas.grid.getCenterPoint({x, y});
+				return new PIXI.Point(center.x, center.y);
 			}
 		} else {
-			return new PIXI.Point(...canvas.grid.getCenter(x, y));
+			const center = canvas.grid.getCenterPoint({x, y});
+				return new PIXI.Point(center.x, center.y);
 		}
 	}
 
-	const [topLeftX, topLeftY] = canvas.grid.getTopLeft(x, y);
+	const {x: topLeftX, y: topLeftY} = canvas.grid.getTopLeftPoint({x, y});
 	let cellX, cellY;
-	if (tokenData.width % 2 === 0) cellX = x - canvas.grid.h / 2;
+	if (tokenData.width % 2 === 0) cellX = x - canvas.grid.sizeX / 2;
 	else cellX = x;
-	if (tokenData.height % 2 === 0) cellY = y - canvas.grid.h / 2;
+	if (tokenData.height % 2 === 0) cellY = y - canvas.grid.sizeY / 2;
 	else cellY = y;
-	const [centerX, centerY] = canvas.grid.getCenter(cellX, cellY);
+	const {x: centerX, y: centerY} = canvas.grid.getCenterPoint({x: cellX, y: cellY});
 	let snapX, snapY;
 	// Tiny tokens can snap to the cells corners
 	if (tokenData.width <= 0.5) {
 		const offsetX = x - topLeftX;
-		const subGridWidth = Math.floor(canvas.grid.w / 2);
+		const subGridWidth = Math.floor(canvas.grid.sizeX / 2);
 		const subGridPosX = Math.floor(offsetX / subGridWidth);
 		snapX = topLeftX + (subGridPosX + 0.5) * subGridWidth;
 	}
@@ -45,17 +47,17 @@ function getSnapPointForTokenData(x, y, tokenData) {
 	}
 	// All remaining tokens (those with even or fractional multipliers on square grids) snap to the intersection points of the grid
 	else {
-		snapX = centerX + canvas.grid.w / 2;
+		snapX = centerX + canvas.grid.sizeX / 2;
 	}
 	if (tokenData.height <= 0.5) {
 		const offsetY = y - topLeftY;
-		const subGridHeight = Math.floor(canvas.grid.h / 2);
+		const subGridHeight = Math.floor(canvas.grid.sizeY / 2);
 		const subGridPosY = Math.floor(offsetY / subGridHeight);
 		snapY = topLeftY + (subGridPosY + 0.5) * subGridHeight;
 	} else if (Math.round(tokenData.height) % 2 === 1 || tokenData.height < 1) {
 		snapY = centerY;
 	} else {
-		snapY = centerY + canvas.grid.h / 2;
+		snapY = centerY + canvas.grid.sizeY / 2;
 	}
 	return new PIXI.Point(snapX, snapY);
 }
@@ -126,7 +128,7 @@ export function getTokenShapeForTokenData(tokenData, scene = canvas.scene) {
 		if (tokenData.altOrientation) {
 			shape.forEach(space => (space.y *= -1));
 		}
-		if (canvas.grid.grid.columnar)
+		if (canvas.grid.columns)
 			shape = shape.map(space => {
 				return {x: space.y, y: space.x};
 			});
@@ -144,11 +146,11 @@ export function getAreaFromPositionAndShape(position, shape) {
 	return shape.map(space => {
 		let x = position.x + space.x;
 		let y = position.y + space.y;
-		if (canvas.grid.isHex) {
+		if (canvas.grid.isHexagonal) {
 			let shiftedRow;
-			if (canvas.grid.grid.even) shiftedRow = 1;
+			if (canvas.grid.even) shiftedRow = 1;
 			else shiftedRow = 0;
-			if (canvas.grid.grid.columnar) {
+			if (canvas.grid.columns) {
 				if (space.x % 2 !== 0 && position.x % 2 !== shiftedRow) {
 					y += 1;
 				}
@@ -164,8 +166,8 @@ export function getAreaFromPositionAndShape(position, shape) {
 
 export function buildOffset(startPos, endPos) {
 	const offset = {x: endPos.x - startPos.x, y: endPos.y - startPos.y};
-	if (canvas.grid.isHex) {
-		if (canvas.grid.grid.columnar) {
+	if (canvas.grid.isHexagonal) {
+		if (canvas.grid.columns) {
 			offset.adjustmentNeeded = (startPos.x - endPos.x) % 2 !== 0;
 			offset.originEven = startPos.x % 2 === 0;
 		} else {
@@ -178,10 +180,10 @@ export function buildOffset(startPos, endPos) {
 
 export function applyOffset(origin, offset) {
 	const pos = {x: origin.x + offset.x, y: origin.y + offset.y};
-	if (canvas.grid.isHex && offset.adjustmentNeeded) {
-		if (canvas.grid.grid.columnar) {
+	if (canvas.grid.isHexagonal && offset.adjustmentNeeded) {
+		if (canvas.grid.columns) {
 			if ((origin.x % 2 === 0) !== offset.originEven) {
-				if (offset.originEven === canvas.grid.grid.even) {
+				if (offset.originEven === canvas.grid.even) {
 					pos.y -= 1;
 				} else {
 					pos.y += 1;
@@ -189,7 +191,7 @@ export function applyOffset(origin, offset) {
 			}
 		} else {
 			if ((origin.y % 2 === 0) !== offset.originEven) {
-				if (offset.originEven === canvas.grid.grid.even) {
+				if (offset.originEven === canvas.grid.even) {
 					pos.x -= 1;
 				} else {
 					pos.x += 1;

@@ -6,7 +6,14 @@ import * as GridlessPathfinding from "../wasm/gridless_pathfinding.js";
 
 export let cache;
 
+export function disposeCaches() {
+	cache?.dispose();
+	cache = undefined;
+}
+
 export function initializeCaches() {
+	disposeCaches();
+	if (!canvas?.ready) return;
 	if (canvas.grid.type === CONST.GRID_TYPES.GRIDLESS) {
 		cache = new GridlessCache();
 	} else {
@@ -15,6 +22,7 @@ export function initializeCaches() {
 }
 
 export function wipeCaches() {
+	if (!cache || !canvas?.ready) return;
 	cache.reset();
 	resetJobs();
 }
@@ -24,7 +32,10 @@ class Cache {
 		this.reset();
 	}
 
+	dispose() {}
+
 	reset() {
+		this.dispose();
 		this.levelIndexes = detectLevels();
 		this.graphs = [];
 	}
@@ -57,21 +68,21 @@ class Cache {
 export class GriddedCache extends Cache {
 	reset() {
 		super.reset();
-		if (canvas.grid.isHex && canvas.grid.grid.columnar) {
-			this.gridWidth = Math.ceil(canvas.dimensions.width / ((3 / 4) * canvas.grid.w));
+		if (canvas.grid.isHexagonal && canvas.grid.columns) {
+			this.gridWidth = Math.ceil(canvas.dimensions.width / ((3 / 4) * canvas.grid.sizeX));
 		} else {
-			this.gridWidth = Math.ceil(canvas.dimensions.width / canvas.grid.w);
+			this.gridWidth = Math.ceil(canvas.dimensions.width / canvas.grid.sizeX);
 		}
-		if (canvas.grid.isHex && !canvas.grid.grid.columnar) {
-			this.gridHeight = Math.ceil(canvas.dimensions.height / ((3 / 4) * canvas.grid.h));
+		if (canvas.grid.isHexagonal && !canvas.grid.columns) {
+			this.gridHeight = Math.ceil(canvas.dimensions.height / ((3 / 4) * canvas.grid.sizeY));
 		} else {
-			this.gridHeight = Math.ceil(canvas.dimensions.height / canvas.grid.h);
+			this.gridHeight = Math.ceil(canvas.dimensions.height / canvas.grid.sizeY);
 		}
 	}
 
 	static getSnapPointIndexForTokenData(tokenData) {
 		if (canvas.grid.type === CONST.GRID_TYPES.GRIDLESS) return 0;
-		if (canvas.grid.isHex) {
+		if (canvas.grid.isHexagonal) {
 			if (tokenData.hexSizeSupport?.altSnappingFlag) {
 				return tokenData.hexSizeSupport.borderSize % 2;
 			} else {
@@ -95,7 +106,7 @@ export class GriddedCache extends Cache {
 		let node = graph[pos.y][pos.x];
 		if (!node) {
 			const neighbors = [];
-			for (const neighborPos of canvas.grid.grid.getNeighbors(pos.y, pos.x).map(([y, x]) => {
+			for (const neighborPos of canvas.grid.getAdjacentOffsets({i: pos.y, j: pos.x}).map(({i: y, j: x}) => {
 				return {x, y};
 			})) {
 				if (
@@ -131,13 +142,19 @@ export class GriddedCache extends Cache {
 }
 
 class GridlessCache extends Cache {
+	dispose() {
+		for (const levels of this.graphs ?? []) {
+			if (levels) for (const graph of levels.values()) GridlessPathfinding.freeGraph(graph);
+		}
+	}
+
 	getGraphFor(tokenSize, levelIndex, elevation) {
 		let levelGraphs = this.graphs[levelIndex];
 		if (!levelGraphs) {
 			levelGraphs = new Map();
 			this.graphs[levelIndex] = levelGraphs;
 		}
-		let graph = levelGraphs[tokenSize];
+		let graph = levelGraphs.get(tokenSize);
 		if (!graph) {
 			const tokenCalcSize =
 				tokenSize * canvas.grid.size * game.settings.get("routinglib", "gridlessTokenSizeRatio");
@@ -149,7 +166,7 @@ class GridlessCache extends Cache {
 				elevation,
 				wallHeightEnabled,
 			);
-			levelGraphs[tokenSize] = graph;
+			levelGraphs.set(tokenSize, graph);
 		}
 		return graph;
 	}
@@ -189,7 +206,7 @@ function detectLevels() {
 		}
 	}
 	// Levels must be sorted because it will be bisected later
-	levelBorderElevations.sort();
+	levelBorderElevations.sort((a, b) => a - b);
 	const levels = [];
 	for (const elevation of levelBorderElevations) {
 		const border = levelBorders[elevation];
@@ -219,7 +236,7 @@ export function stepCollidesWithWall(from, to, tokenData, adjustPos = false) {
 		adjustedStart = stepStart;
 	}
 	adjustedStart.t = adjustedStart.b = tokenData.elevation;
-	const source = new VisionSource({});
+	const source = new CONFIG.Canvas.visionSourceClass({});
 	return CONFIG.Canvas.polygonBackends.move.testCollision(adjustedStart, stepEnd, {
 		mode: "any",
 		type: "move",

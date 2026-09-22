@@ -23,20 +23,20 @@ export class GriddedPathfinder {
 		this.startCost = 0; // TODO Allow specifying a start cost
 		this.interpolate = options.interpolate ?? true;
 		this.maxDistance = options.maxDistance ?? Infinity;
-		this.maxDistance = Math.round(this.maxDistance / canvas.scene.dimensions.distance);
+		this.maxDistance = this.maxDistance / canvas.scene.dimensions.distance;
 		this.ignoreTerrain = options.ignoreTerrain ?? false;
 		this.reset();
 	}
 
 	reset() {
-		this.use5105 = game.system.id === "pf2e" || canvas.grid.diagonalRule === "5105";
+		this.use5105 = game.system.id === "pf2e" || canvas.grid.diagonals === CONST.GRID_DIAGONALS.ALTERNATING_1;
 		this.nextNodes = new PriorityQueueSet(
 			(node1, node2) => node1.node === node2.node,
 			node => node.estimated,
 		);
 		this.previousNodes = new Set();
-		this.gridWidth = Math.ceil(canvas.dimensions.width / canvas.grid.w);
-		this.gridHeight = Math.ceil(canvas.dimensions.height / canvas.grid.h);
+		this.gridWidth = Math.ceil(canvas.dimensions.width / canvas.grid.sizeX);
+		this.gridHeight = Math.ceil(canvas.dimensions.height / canvas.grid.sizeY);
 		this.startNode = cache.getInitializedNode(
 			this.startPos,
 			this.sizeIndex,
@@ -56,8 +56,8 @@ export class GriddedPathfinder {
 		if (!currentNode) {
 			return null;
 		}
-		if (currentNode.cost > this.maxDistance) {
-			return null;
+		if (Math.floor(currentNode.cost) > this.maxDistance) {
+			return undefined;
 		}
 		if (currentNode.node.x === this.targetPos.x && currentNode.node.y === this.targetPos.y) {
 			return currentNode;
@@ -79,8 +79,8 @@ export class GriddedPathfinder {
 				const offset = buildOffset(currentNode.node, neighbor);
 				cost = this.terrainCostForStep(tokenArea, offset, currentNode.cost);
 			} else {
-				// Count 5-10-5 diagonals as 1.5 (so two add up to 3) and 5-5-5 diagonals as 1.0001 (to discourage unnecessary diagonals)
-				cost = neighbor.isDiagonal ? (this.use5105 ? 1.5 : 1.0001) : 1;
+				// Keep tie-breaking out of movement cost so exact-distance routes remain reachable.
+				cost = neighbor.isDiagonal ? (this.use5105 ? 1.5 : 1) : 1;
 			}
 
 			cost += currentNode.cost;
@@ -99,7 +99,7 @@ export class GriddedPathfinder {
 		for (const srcCell of tokenArea) {
 			const dstCell = applyOffset(srcCell, offset);
 			// TODO Cache the result of source->destination measurements to speed up the pathfinding for large tokens
-			const ray = new Ray(
+			const ray = new foundry.canvas.geometry.Ray(
 				getCenterFromGridPositionObj(srcCell),
 				getCenterFromGridPositionObj(dstCell),
 			);
@@ -130,7 +130,7 @@ export class GriddedPathfinder {
 					!stepCollidesWithWall(path[path.length - 2], currentNode.node, this.tokenData)
 				) {
 					// Replace last waypoint if the current waypoint leads to a valid path that isn't longer than the old path
-					if (window.terrainRuler) {
+					if (window.terrainRuler && !this.ignoreTerrain) {
 						const startNode = path[path.length - 2];
 						const middleNode = path[path.length - 1];
 						const endNode = currentNode.node;
@@ -182,13 +182,22 @@ export class GriddedPathfinder {
 }
 
 export class GridlessPathfinder {
-	constructor(graph, from, to, options) {
+	constructor(graph, from, to, options, getGraph) {
+		this.getGraph = getGraph;
+		this.from = from;
+		this.to = to;
+		this.maxDistance = options.maxDistance ?? Infinity;
 		const maxDistance = options.maxDistance ?? Infinity;
 		this.pathfinder = GridlessPathfinding.initializePathfinder(from, to, graph, maxDistance);
 	}
 
 	reset() {
-		GridlessPathfinding.resetPathfinder();
+		if (this.getGraph) {
+			// Construct the replacement first, so failure leaves a valid handle to free.
+			const replacement = GridlessPathfinding.initializePathfinder(this.from, this.to, this.getGraph(), this.maxDistance);
+			GridlessPathfinding.dropPathfinder(this.pathfinder);
+			this.pathfinder = replacement;
+		} else GridlessPathfinding.resetPathfinder(this.pathfinder);
 	}
 
 	step() {

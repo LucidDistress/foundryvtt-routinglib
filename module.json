@@ -4,8 +4,7 @@
 	"description": "A library module to calculate a path between two points",
 	"version": "1.1.0",
 	"compatibility": {
-		"minimum": "11",
-		"verified": "11"
+		"minimum": "12"
 	},
 	"authors": [
 		{
@@ -14,12 +13,13 @@
 			"discord": "Stäbchenfisch#5107"
 		}
 	],
-	"esmodules": ["js/main.js"],
+	"esmodules": [
+		"js/main.js"
+	],
 	"url": "https://github.com/manuelVo/foundryvtt-routinglib",
 	"download": "https://github.com/manuelVo/foundryvtt-routinglib/releases/download/v1.1.0/routinglib-1.1.0.zip",
 	"manifest": "https://raw.githubusercontent.com/manuelVo/foundryvtt-routinglib/master/module.json",
 	"readme": "https://github.com/manuelVo/foundryvtt-routinglib/blob/master/README.md",
 	"changelog": "https://github.com/manuelVo/foundryvtt-routinglib/blob/master/CHANGELOG.md",
-	"bugs": "https://github.com/manuelVo/foundryvtt-routinglib/issues",
-	"allowBugReporter": false
+	"bugs": "https://github.com/manuelVo/foundryvtt-routinglib/issues"
 }

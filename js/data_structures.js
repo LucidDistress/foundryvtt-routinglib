@@ -12,62 +12,29 @@ export class PriorityQueueSet {
 	}
 
 	pushWithPriority(value) {
-		const newNode = {value, priority: this.priorityFunction(value), next: null};
-
-		// If the queue is currently empty, we can just set this new node as the first and we're done
-		if (!this.first) {
-			this.first = newNode;
-			return;
-		}
-
-		let inserted = false;
-		let previous;
+		const priority = this.priorityFunction(value);
+		// Remove an inferior equivalent before inserting in priority order.
+		let previous = null;
 		let current = this.first;
-
-		// Loop through the existing elements
 		while (current) {
 			if (this.elementMatcher(current.value, value)) {
-				// We've found an equivalent element before one with a lower priority. This one has at least
-				// the same priority as the new one, so don't bother inserting
-				return;
-			} else if (newNode.priority <= current.priority) {
-				// We've found some element with lower priority than the new one, so insert the new one just before it
-				newNode.next = current;
-				if (previous) {
-					previous.next = newNode;
-				} else {
-					this.first = newNode;
-				}
-				inserted = true;
-
-				previous = current;
-				current = current.next;
+				if (current.priority <= priority) return;
+				if (previous) previous.next = current.next;
+				else this.first = current.next;
 				break;
 			}
 			previous = current;
 			current = current.next;
 		}
-
-		if (inserted) {
-			// Go through the rest of the list and try to find an equivalent element to the new one.
-			// We know it has higher priority than the new one, so remove it.
-			while (current) {
-				if (this.elementMatcher(current.value, value)) {
-					if (previous) {
-						previous.next = current.next;
-					} else {
-						this.first = current.next;
-					}
-					return;
-				}
-				previous = current;
-				current = current.next;
-			}
-		} else {
-			// We reached the end of the queue without finding a lower-priority or existing element, so
-			// insert the new one at the end
-			previous.next = newNode;
+		previous = null;
+		current = this.first;
+		while (current && current.priority <= priority) {
+			previous = current;
+			current = current.next;
 		}
+		const node = {value, priority, next: current};
+		if (previous) previous.next = node;
+		else this.first = node;
 	}
 
 	hasNext() {
