@@ -71,8 +71,8 @@ impl Pathfinder {
 		// Get node with cheapest estimate
 		let current_node = self.next_nodes.pop().unwrap();
 
-		if current_node.cost > self.max_distance {
-			return PathfindingResult::NoPath;
+		if exceeds_budget(current_node.cost, self.max_distance) {
+			return PathfindingResult::Unfinished;
 		}
 
 		if current_node.point == self.to {
@@ -88,10 +88,12 @@ impl Pathfinder {
 			if self.previous_nodes.contains(&neighbor) {
 				continue;
 			}
+			// The budget and reported cost must use geometric distance only.
+			let cost = current_node.cost + edge.cost;
+			if exceeds_budget(cost, self.max_distance) {
+				continue;
+			}
 			self.initialize_edges(neighbor);
-
-			// Add a flat 0.00001 cost per node to discurage creation of unnecessary waypoints
-			let cost = current_node.cost + edge.cost + 0.00001;
 			let discovered_neighbor = DiscoveredNode {
 				point: neighbor,
 				cost,
@@ -162,5 +164,73 @@ impl Pathfinder {
 
 	fn collides_with_wall(line: &LineSegment, wall: &LineSegment) -> bool {
 		line.intersects(wall)
+	}
+}
+
+// Permit only floating-point roundoff at exact budget boundaries.
+fn exceeds_budget(cost: f64, budget: f64) -> bool {
+	budget.is_finite()
+		&& cost - budget > 16.0 * f64::EPSILON * cost.abs().max(budget.abs()).max(1.0)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn solve(graph: Graph, from: Point, to: Point, budget: f64) -> Option<(f64, Vec<Point>)> {
+		let mut search = Pathfinder::initialize(from, to, Rc::new(RefCell::new(graph)), budget);
+		for _ in 0..1000 {
+			match search.step() {
+				PathfindingResult::Path(node) => return Some((node.cost, search.unroll_path(node))),
+				PathfindingResult::NoPath => return None,
+				PathfindingResult::Unfinished => (),
+			}
+		}
+		panic!("search did not terminate");
+	}
+
+	fn empty_graph() -> Graph {
+		Graph { nodes: vec![], edges: FxHashMap::default(), walls: vec![] }
+	}
+
+	fn detour_graph() -> Graph {
+		Graph {
+			nodes: vec![Point::new(3.0, 4.0)],
+			edges: FxHashMap::default(),
+			walls: vec![LineSegment::new(Point::new(3.0, -1.0), Point::new(3.0, 3.0))],
+		}
+	}
+
+	#[test]
+	fn direct_path_accepts_exact_budget_without_penalty() {
+		let from = Point::new(0.0, 0.0);
+		let to = Point::new(3.0, 4.0);
+		let (cost, path) = solve(empty_graph(), from, to, 5.0).unwrap();
+		assert_eq!(cost, 5.0);
+		assert_eq!(path, vec![from, to]);
+		assert!(solve(empty_graph(), from, to, 4.999999).is_none());
+	}
+
+	#[test]
+	fn detour_budget_matches_sum_of_segments() {
+		let from = Point::new(0.0, 0.0);
+		let to = Point::new(6.0, 0.0);
+		let (cost, path) = solve(detour_graph(), from, to, 10.0).unwrap();
+		assert_eq!(path, vec![from, Point::new(3.0, 4.0), to]);
+		assert_eq!(cost, path.windows(2).map(|pair| pair[0].distance_to(pair[1])).sum::<f64>());
+		assert!(solve(detour_graph(), from, to, 9.999999).is_none());
+	}
+
+	#[test]
+	fn zero_distance_and_unbounded_requests() {
+		let from = Point::new(0.0, 0.0);
+		assert_eq!(solve(empty_graph(), from, from, 0.0), Some((0.0, vec![from])));
+		assert_eq!(solve(empty_graph(), from, Point::new(3.0, 4.0), f64::INFINITY).unwrap().0, 5.0);
+	}
+
+	#[test]
+	fn budget_tolerance_only_covers_roundoff() {
+		assert!(!exceeds_budget(0.1 + 0.2, 0.3));
+		assert!(exceeds_budget(0.30000001, 0.3));
 	}
 }

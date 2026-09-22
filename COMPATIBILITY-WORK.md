@@ -28,7 +28,7 @@ until a release is actually built and published in this fork.
   delegate to native token collision with level and movement-height context.
   This does not yet establish full v14 movement compatibility.
 - Verify diagonal rules in Foundry after the isolated distance regression suite.
-- Rebuild/fix Rust gridless exact-boundary costs; scene-unit conversion is implemented as an opt-in compatibility option.
+- Complete the WASM rebuild and runtime validation for the Rust distance fixes.
 - Test hex token sizes/orientations, narrow passages, one-way walls, doors,
   scene switching, and Rideable in Foundry.
 - Extend native level/directional-wall handling to the Rust gridless engine.
@@ -114,3 +114,26 @@ region movement rules, or native level support to the Rust gridless engine.
 References:
 - https://foundryvtt.com/api/classes/foundry.canvas.placeables.Token.html#checkCollision
 - https://foundryvtt.com/api/classes/foundry.canvas.sources.PointMovementSource.html
+
+## Batch 6: Rust distance correctness and build dependencies
+- Remove the per-edge distance penalty and report actual route cost through the JS API.
+- Prune over-budget candidates using roundoff-only tolerance.
+- Normalize signed zero when hashing points, matching floating-point equality.
+- Add five native Rust regression tests for exact/insufficient budgets, detours,
+  zero/unbounded requests, roundoff and signed-zero lookup.
+- Update wasm-bindgen/js-sys minimum versions and Cargo.lock after the old locked
+  wasm-bindgen failed compilation with current Rust. Lock resolves wasm-bindgen
+  0.2.128 and js-sys 0.3.105. Release builds now enforce --locked.
+- Add tools/test-wasm.mjs to check generated web bindings, native graph ownership,
+  exact budgets and detour costs against the actual binary.
+
+Validation: all five Rust tests passed on isolated Rust 1.98.1 Windows GNU tooling;
+all 22 JavaScript tests passed. No normal PATH or user Rust installation changed.
+The toolchain resides in the temporary routinglib-rust-tools directory.
+
+WASM release build attempted with wasm-pack 0.15.0. Windows Application Control
+blocked the generated rustversion release build script (OS error 4551). This is
+an OS execution-policy blocker, not a test failure. No policy bypass was attempted.
+The WASM runtime test script has been syntax-checked but has NOT run against a rebuilt
+binary. Build/package/live Foundry verification remains pending in an approved build
+environment. Nothing was deployed.

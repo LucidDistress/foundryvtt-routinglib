@@ -309,7 +309,7 @@ pub fn step(js_pathfinder: &mut JsPathfinder) -> JsValue {
 		PathfindingResult::Unfinished => return JsValue::UNDEFINED,
 		PathfindingResult::NoPath => return JsValue::NULL,
 	};
-	let cost = first_node.estimated;
+	let cost = first_node.cost;
 	let path = pathfinder.unroll_path(first_node);
 	let path = path.into_iter().map(JsValue::from).collect::<Array>();
 	let result = Object::default();

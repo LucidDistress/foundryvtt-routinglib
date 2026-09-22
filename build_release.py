@@ -33,7 +33,7 @@ zip_root = PurePath(f'{manifest["id"]}')
 
 filename = f'{manifest["id"]}-{manifest["version"]}.zip'
 
-result = subprocess.run([wasm_pack, "build", "--target", "web", "--out-dir", build_dir, root_dir / rust_dir])
+result = subprocess.run([wasm_pack, "build", "--target", "web", "--out-dir", build_dir, root_dir / rust_dir, "--locked"])
 if result.returncode != 0:
 	raise Exception("Wasm build failed")
 

@@ -50,8 +50,9 @@ impl PartialEq for Point {
 
 impl Hash for Point {
 	fn hash<H: Hasher>(&self, hasher: &mut H) {
-		self.x.to_bits().hash(hasher);
-		self.y.to_bits().hash(hasher);
+		// IEEE signed zero compares equal; equal points must also hash equally.
+		(if self.x == 0.0 { 0.0 } else { self.x }).to_bits().hash(hasher);
+		(if self.y == 0.0 { 0.0 } else { self.y }).to_bits().hash(hasher);
 	}
 }
 
@@ -235,5 +236,19 @@ impl Rect {
 		let (left_rect, right_rect) = minmax_by_key(self, other, |rect| rect.left);
 		let (top_rect, bottom_rect) = minmax_by_key(self, other, |rect| rect.top);
 		left_rect.right >= right_rect.left && top_rect.bottom >= bottom_rect.top
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::collections::HashSet;
+
+	#[test]
+	fn signed_zero_points_have_identical_hash_identity() {
+		let mut points = HashSet::new();
+		points.insert(Point::new(0.0, -0.0));
+		assert!(points.contains(&Point::new(-0.0, 0.0)));
+		assert!(!points.insert(Point::new(-0.0, 0.0)));
 	}
 }

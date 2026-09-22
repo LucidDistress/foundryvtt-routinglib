@@ -122,8 +122,8 @@ await routinglib.calculatePath(startPixel, endPixel, {
 ```
 
 `gridlessDistanceUnits: "pixels"` explicitly requests legacy behavior. This option
-only applies to gridless scenes. The WASM engine's small per-edge cost penalty remains;
-exact-boundary gridless tests require a subsequent Rust rebuild/fix.
+only applies to gridless scenes. The Rust source now uses geometric distance without a per-edge penalty. Rebuild
+the WASM assets to include this fix; an older binary retains its previous behavior.
 
 ### Optional gridless engine
 
@@ -144,3 +144,12 @@ pending requests with `null`, allowing callers to request a new route.
 
 These are same-level wall checks. Region movement rules, vertical travel, full
 footprint clearance and native gridless level support are not implemented yet.
+
+### Rust and WASM validation
+
+Run native engine regressions with `cargo test --locked --manifest-path rust/Cargo.toml`.
+Build release assets with `python build_release.py` (Rust and wasm-pack required).
+The release build uses the committed Cargo lockfile.
+After extracting the resulting archive, run `node tools/test-wasm.mjs <module/wasm>`
+to test the generated bindings and binary. This is separate from the JavaScript
+suite, which uses simulated WASM boundaries.
