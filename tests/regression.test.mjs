@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const source = name => readFile(new URL('../js/' + name, import.meta.url), 'utf8');
 const moduleURL = s => 'data:text/javascript;base64,' + Buffer.from(s).toString('base64');
-const load = async name => import(moduleURL(await source(name)));
+const load = async name => import(moduleURL(await dependency(name)));
+const dependency = async name => name === 'util.js' ? (await source(name)).replace('./foundry_fixes.js', moduleURL(await source('foundry_fixes.js'))) : source(name);
 
 test('priority queue replaces cheaper duplicates at head, middle, and tail', async () => {
  const {PriorityQueueSet} = await load('data_structures.js');
@@ -61,7 +62,7 @@ test('exact diagonal budgets and gridless reset handle', async()=>{
  globalThis.__routingResetHandle=null;
  let code=await source('pathfinder.js');
  code=code.replace('import {cache, stepCollidesWithWall} from "./cache.js";', 'const cache=globalThis.__routingTestCache; const stepCollidesWithWall=()=>false;');
- for(const name of ['data_structures.js','foundry_fixes.js','util.js','movement_cost.js']) code=code.replace('./'+name,moduleURL(await source(name)));
+ for(const name of ['data_structures.js','foundry_fixes.js','util.js','movement_cost.js']) code=code.replace('./'+name,moduleURL(await dependency(name)));
  code=code.replace('import * as GridlessPathfinding from "./gridless.js";', 'const GridlessPathfinding={initializePathfinder:()=>123,resetPathfinder:h=>{globalThis.__routingResetHandle=h;}};');
  const {GriddedPathfinder,GridlessPathfinder}=await import(moduleURL(code));
  for(const alternating of [false,true]) {

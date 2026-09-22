@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const url=s=>'data:text/javascript;base64,'+Buffer.from(s).toString('base64');
 const read=name=>readFile(new URL('../js/'+name,import.meta.url),'utf8');
+const dependency=async name=>name==='util.js'?(await read(name)).replace('./foundry_fixes.js',url(await read('foundry_fixes.js'))):read(name);
 globalThis.CONST={GRID_TYPES:{GRIDLESS:0,SQUARE:1},GRID_DIAGONALS:{EQUIDISTANT:0,EXACT:1,APPROXIMATE:2,RECTILINEAR:3,ALTERNATING_1:4,ALTERNATING_2:5,ILLEGAL:6}};
 globalThis.window={};
 globalThis.canvas={grid:{type:1,size:100,sizeX:100,sizeY:100},scene:{grid:{type:1},dimensions:{distance:5}},dimensions:{width:800,height:800,distance:5}};
@@ -12,7 +13,7 @@ const calls=[];
 globalThis.__distanceWasm={initializePathfinder:(from,to,graph,max)=>{calls.push({from,to,graph,max});return calls.length;},dropPathfinder:h=>calls.push({drop:h}),resetPathfinder:h=>calls.push({reset:h})};
 let code=await read('pathfinder.js');
 code=code.replace('import {cache, stepCollidesWithWall} from "./cache.js";','const cache=globalThis.__distanceCache; const stepCollidesWithWall=()=>false;');
-for(const name of ['movement_cost.js','data_structures.js','foundry_fixes.js','util.js'])code=code.replace('./'+name,url(await read(name)));
+for(const name of ['movement_cost.js','data_structures.js','foundry_fixes.js','util.js'])code=code.replace('./'+name,url(await dependency(name)));
 code=code.replace('import * as GridlessPathfinding from "./gridless.js";','const GridlessPathfinding=globalThis.__distanceWasm;');
 const {GriddedPathfinder,GridlessPathfinder}=await import(url(code));
 function board(blocked=new Set()) {

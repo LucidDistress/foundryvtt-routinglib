@@ -1,3 +1,4 @@
+import {getPixelsFromGridPositionObj} from "./foundry_fixes.js";
 export function getSnapPointForToken(x, y, token) {
 	return getSnapPointForTokenData(x, y, buildSnapPointTokenData(token));
 }
@@ -200,4 +201,14 @@ export function applyOffset(origin, offset) {
 		}
 	}
 	return pos;
+}
+
+// Routing coordinates retain their existing snap-center convention. Native
+// movement APIs require top-left waypoints and a feet elevation instead.
+export function getNativeMovementWaypoint(position, tokenData) {
+	const {token, width, height, depth, shape, elevation, level, action} = tokenData;
+	const center = getSnapPointForTokenDataObj(getPixelsFromGridPositionObj(position), tokenData);
+	const pivot = token.document.getMovementOrigin({x: 0, y: 0, elevation: 0, width, height, depth, shape});
+	return {x: center.x - pivot.x, y: center.y - pivot.y,
+		elevation, width, height, depth, shape, level, action};
 }

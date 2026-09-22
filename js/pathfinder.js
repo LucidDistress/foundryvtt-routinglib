@@ -1,13 +1,13 @@
 import {diagonalCost, isAlternating, exceedsBudget} from "./movement_cost.js";
 import {cache, stepCollidesWithWall} from "./cache.js";
 import {PriorityQueueSet} from "./data_structures.js";
-import {getCenterFromGridPositionObj, getPixelsFromGridPositionObj} from "./foundry_fixes.js";
+import {getCenterFromGridPositionObj} from "./foundry_fixes.js";
 import {
 	applyOffset,
 	buildOffset,
 	getAreaFromPositionAndShape,
 	getTokenShapeForTokenData,
-	getSnapPointForTokenDataObj,
+	getNativeMovementWaypoint,
 } from "./util.js";
 
 import * as GridlessPathfinding from "./gridless.js";
@@ -168,14 +168,7 @@ export class GriddedPathfinder {
 		const positions = [next];
 		for (let entry = current; entry; entry = entry.previous) positions.push(entry.node);
 		positions.reverse();
-		const {width, height, depth, shape, elevation, level, action} = this.tokenData;
-		const pivot = this.token.document.getMovementOrigin({x: 0, y: 0,
-			elevation: 0, width, height, depth, shape});
-		const waypoints = positions.map(position => {
-			const center = getSnapPointForTokenDataObj(getPixelsFromGridPositionObj(position), this.tokenData);
-			return {x: center.x - pivot.x, y: center.y - pivot.y,
-				elevation, width, height, depth, shape, level, action};
-		});
+		const waypoints = positions.map(position => getNativeMovementWaypoint(position, {...this.tokenData, token: this.token}));
 		const regionalized = this.token.createTerrainMovementPath(waypoints, {preview: false});
 		const measurement = this.token.measureMovementPath(regionalized, {preview: false});
 		const cost = measurement.cost / canvas.dimensions.distance;

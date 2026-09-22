@@ -25,8 +25,8 @@ until a release is actually built and published in this fork.
 
 ## Remaining before release
 - Validate the native terrain measurement integration in live Foundry and finish
-  token-footprint/action-specific collision handling. Gridded wall checks delegate
-  to native token collision with level and movement-height context; full v14
+  token-footprint collision handling. Gridded token wall checks delegate
+  to native movement constraints with action, level and height context; full v14
   movement compatibility is not yet established.
 - Verify diagonal rules in Foundry after the isolated distance regression suite.
 - Complete the WASM rebuild and runtime validation for the Rust distance fixes.
@@ -166,3 +166,27 @@ position plus diagonal parity; custom history-dependent cost rules may need addi
 search state. Actor/item/effect-derived cost changes during an ongoing request are not
 currently tracked. Gridless native terrain, vertical transitions, action-specific wall
 restrictions and full footprint clearance remain pending. WASM rebuild remains deferred.
+
+## Batch 8: action-specific movement constraints
+- Use Token.constrainMovementPath for native gridded token edges when available.
+  Foundry selects the movement action's wall restriction; a generic movement-wall
+  precheck no longer incorrectly blocks actions that ignore walls.
+- Reject constrained, partial, shifted, wrong-level or wrong-elevation destinations.
+  Native errors propagate instead of being treated as a clear path.
+- Ignore cost only during edge collision checks; full-prefix terrain measurement
+  continues to enforce costs and route budgets separately.
+- Share native waypoint conversion between collision and terrain measurement.
+  Preserve the existing snap-center convention and pass feet elevation, dimensions,
+  depth, shape, level and action consistently.
+- Include movement action in graph cache identity. Retain older token collision
+  and tokenless movement-source fallbacks.
+
+Validation: all 27 JavaScript tests pass. Four new simulated-native tests cover
+walking versus teleportation restrictions, partial/shifted results, error propagation,
+rectangular/fractional waypoint conversion and action-specific cache separation.
+These tests verify delegation, not Foundry's own collision implementation.
+
+Remaining: live action/door/surface and large-token placement checks, full swept
+footprint clearance, vertical routes, gridless native levels/terrain, actor/item/effect
+cost invalidation, performance profiling and the deferred WASM rebuild. No live
+scene was changed; nothing was deployed or marked as a verified v14 release.

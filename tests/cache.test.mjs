@@ -12,7 +12,7 @@ globalThis.canvas={ready:true,grid:{type:1,size:100,sizeX:100,sizeY:100,
 let code=await readFile(new URL('../js/cache.js',import.meta.url),'utf8');
 code=code.replace('import {resetJobs} from "./background.js";','const resetJobs=()=>globalThis.__cacheCounts.reset++;');
 code=code.replace('import {getPixelsFromGridPositionObj} from "./foundry_fixes.js";','const getPixelsFromGridPositionObj=p=>p;');
-code=code.replace('import {getSnapPointForTokenDataObj, isModuleActive} from "./util.js";','const getSnapPointForTokenDataObj=p=>p; const isModuleActive=()=>false;');
+code=code.replace('import {getSnapPointForTokenDataObj, getNativeMovementWaypoint, isModuleActive} from "./util.js";','const getSnapPointForTokenDataObj=p=>p; const isModuleActive=()=>false;');
 code=code.replace('import * as GridlessPathfinding from "./gridless.js";',`const GridlessPathfinding={initializeGraph:(...args)=>{const c=globalThis.__cacheCounts;c.created.push(args);return c.created.length;},freeGraph:g=>globalThis.__cacheCounts.freed.push(g)};`);
 // Keep actual cache construction, keys, adjacency and reset/disposal code; inject a
 // deterministic collision oracle which changes at an exact elevation boundary.

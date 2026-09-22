@@ -1,6 +1,6 @@
 import {resetJobs} from "./background.js";
 import {getPixelsFromGridPositionObj} from "./foundry_fixes.js";
-import {getSnapPointForTokenDataObj, isModuleActive} from "./util.js";
+import {getSnapPointForTokenDataObj, getNativeMovementWaypoint, isModuleActive} from "./util.js";
 
 import * as GridlessPathfinding from "./gridless.js";
 
@@ -89,7 +89,7 @@ export class GriddedCache extends Cache {
 			tokenKey = this.tokenKeys.get(tokenData.token);
 		}
 		const key = JSON.stringify([tokenKey, tokenData.level ?? null, tokenData.depth ?? null,
-			tokenData.shape ?? null, sizeIndex, tokenData.width, tokenData.height,
+			tokenData.shape ?? null, tokenData.action ?? null, sizeIndex, tokenData.width, tokenData.height,
 			tokenData.elevation, tokenData.size ?? null, tokenData.altOrientation ?? false,
 			tokenData.hexSizeSupport?.altSnappingFlag ?? false,
 			tokenData.hexSizeSupport?.borderSize ?? null,
@@ -181,6 +181,22 @@ export function stepCollidesWithWall(from, to, tokenData, adjustPos = false) {
 		const currentLevel = token.document._source?.level ?? token.document.level;
 		if (nativeLevels && currentLevel !== tokenData.level) {
 			throw new Error("RoutingLib token level changed during the request.");
+		}
+		if (nativeLevels && typeof token.constrainMovementPath === "function") {
+			// Let Foundry choose the wall restriction for the current action (e.g.
+			// teleportation), apply depth/surface checks and adjust wall endpoints.
+			// A preliminary checkCollision(type="move") would incorrectly reject
+			// actions which use a different wall restriction or ignore walls.
+			const start = getNativeMovementWaypoint(from, tokenData);
+			const end = getNativeMovementWaypoint(to, tokenData);
+			const [path, constrained] = token.constrainMovementPath([start, end], {
+				preview: false, ignoreWalls: false, ignoreCost: true, history: false
+			});
+			const last = path.at(-1);
+			// Never treat a partial path as reaching the requested neighboring cell.
+			return constrained || path.length < 2 || !last
+				|| last.x !== Math.round(end.x) || last.y !== Math.round(end.y)
+				|| last.elevation !== end.elevation || last.level !== end.level;
 		}
 		// Foundry supplies the movement source and handles doors, wall directions,
 		// elevation and the token's level. Never turn a collision error into a pass.
