@@ -24,9 +24,10 @@ until a release is actually built and published in this fork.
   absent optional localization files correctly when packaging.
 
 ## Remaining before release
-- Integrate region restrictions/costs and token footprints; gridded wall checks now
-  delegate to native token collision with level and movement-height context.
-  This does not yet establish full v14 movement compatibility.
+- Validate the native terrain measurement integration in live Foundry and finish
+  token-footprint/action-specific collision handling. Gridded wall checks delegate
+  to native token collision with level and movement-height context; full v14
+  movement compatibility is not yet established.
 - Verify diagonal rules in Foundry after the isolated distance regression suite.
 - Complete the WASM rebuild and runtime validation for the Rust distance fixes.
 - Test hex token sizes/orientations, narrow passages, one-way walls, doors,
@@ -137,3 +138,31 @@ an OS execution-policy blocker, not a test failure. No policy bypass was attempt
 The WASM runtime test script has been syntax-checked but has NOT run against a rebuilt
 binary. Build/package/live Foundry verification remains pending in an approved build
 environment. Nothing was deployed.
+
+## Batch 7: native region movement costs
+- Token-based gridded searches use v14 createTerrainMovementPath and
+  measureMovementPath when available, with preview=false. Native measurement takes
+  precedence over the legacy terrain-ruler integration.
+- Measure each complete candidate prefix so diagonals are not restarted per edge.
+  Keep measured diagonal parity in search state and use a conservative heuristic.
+- Honor finite native costs, reject impassable (infinite-cost) candidates and validate
+  measurements. Negative incremental costs are unsupported and reported as errors.
+- Disable waypoint interpolation for native terrain paths to preserve measured costs.
+- Pass snap-derived top-left waypoints, level, dimensions, elevation and action to
+  Foundry. Full native shape positioning still needs live verification.
+- Region/RegionBehavior create/update/delete events invalidate pending requests only
+  for the active scene; movement-action edits also invalidate token request context.
+- Preserve ignoreTerrain and legacy fallback when native measurement is unavailable.
+
+Validation: 23 JavaScript tests pass, including a simulated native terrain evaluator
+covering expensive/impassable cells, route selection, exact/insufficient budgets,
+ignoreTerrain, diagonal history and malformed measurements. Tests also exercise all
+six region/behavior invalidation hooks. No token moves or region entry scripts run.
+
+Limitations: native region behavior execution and runtime performance have NOT been
+validated in Foundry. Full-prefix measurement costs more than individual edge checks;
+profile larger maps before release. Costs must be nonnegative and determined by path
+position plus diagonal parity; custom history-dependent cost rules may need additional
+search state. Actor/item/effect-derived cost changes during an ongoing request are not
+currently tracked. Gridless native terrain, vertical transitions, action-specific wall
+restrictions and full footprint clearance remain pending. WASM rebuild remains deferred.

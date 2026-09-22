@@ -90,3 +90,44 @@ test('gridless scene units convert budgets and costs, retain pixel coordinates o
  assert.equal(calls.at(-1).max,5);assert.equal(legacy.postProcessResult({cost:100}).cost,100);
  assert.throws(()=>new GridlessPathfinder('g',from,to,{gridlessDistanceUnits:'feet'}),RangeError);
 });
+
+
+test('native terrain routes avoid expensive and impassable cells, preserving full-prefix cost',()=>{
+ board();canvas.scene.levels=new Map();canvas.grid.diagonals=0;
+ canvas.grid.getTopLeftPoint=({i,j,x,y})=>i!==undefined?{x:j*100,y:i*100}:{x:Math.floor(x/100)*100,y:Math.floor(y/100)*100};
+ canvas.grid.getCenterPoint=({x,y})=>({x:Math.floor(x/100)*100+50,y:Math.floor(y/100)*100+50});
+ globalThis.PIXI={Point:class{constructor(x,y){this.x=x;this.y=y;}}};
+ let calls=0,maxPrefix=0,mode='terrain';
+ const token={document:{getMovementOrigin:()=>({x:50,y:50,elevation:0})},
+  createTerrainMovementPath:(waypoints,options)=>{assert.equal(options.preview,false);calls++;maxPrefix=Math.max(maxPrefix,waypoints.length);return waypoints.map(w=>({...w,terrain:{test:true}}));},
+  measureMovementPath:(waypoints,options)=>{
+   assert.equal(options.preview,false);let cost=0,diagonals=0;
+   for(let i=1;i<waypoints.length;i++){
+    const a=waypoints[i-1],b=waypoints[i];assert.ok(b.terrain.test);
+    assert.equal(b.level,'ground');assert.equal(b.action,'walk');
+    const diagonal=a.x!==b.x&&a.y!==b.y;
+    if(diagonal)diagonals++;
+    let step=mode==='alternating'&&diagonal?(diagonals%2?5:10):5;
+    if(mode==='terrain'&&b.y===200&&b.x>0&&b.x<400)step=b.x===200?Infinity:40;
+    cost+=step;
+   }
+   return {cost,diagonals};
+  }};
+ const data={width:1,height:1,depth:0,shape:0,elevation:0,level:'ground',action:'walk'};
+ function run(from,to,maxDistance=Infinity,ignoreTerrain=false){
+  const p=new GriddedPathfinder(0,0,from,to,token,data,{maxDistance,ignoreTerrain,interpolate:true});
+  for(let i=0;i<1000;i++){const n=p.step();if(n!==undefined)return n===null?null:p.postProcessResult(n);}
+  throw new Error('native search did not finish');
+ }
+ const from={x:0,y:2},to={x:4,y:2};
+ const result=run(from,to,20);assert.equal(result.cost,20);
+ assert.ok(result.path.every(p=>p.y!==2||p.x===0||p.x===4));
+ assert.ok(maxPrefix>=5);assert.equal(run(from,to,19.999),null);
+ const before=calls;assert.equal(run(from,to,20,true).cost,20);assert.equal(calls,before);
+ mode='alternating';canvas.grid.diagonals=4;
+ assert.equal(run({x:0,y:0},{x:3,y:3},20).cost,20);
+ assert.equal(run({x:0,y:0},{x:3,y:3},19.999),null);
+ token.measureMovementPath=()=>({cost:NaN,diagonals:0});
+ assert.throws(()=>run(from,to),/invalid movement measurement/);
+ delete canvas.scene.levels;
+});

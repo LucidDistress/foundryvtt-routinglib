@@ -142,8 +142,8 @@ level. Missing levels and collision backend failures are reported as errors.
 Relevant token dimension/elevation/level edits and native level changes invalidate
 pending requests with `null`, allowing callers to request a new route.
 
-These are same-level wall checks. Region movement rules, vertical travel, full
-footprint clearance and native gridless level support are not implemented yet.
+These are same-level wall checks. Native terrain costs are integrated for gridded token routes (see below). Vertical
+travel, full footprint clearance and native gridless level support remain pending.
 
 ### Rust and WASM validation
 
@@ -153,3 +153,17 @@ The release build uses the committed Cargo lockfile.
 After extracting the resulting archive, run `node tools/test-wasm.mjs <module/wasm>`
 to test the generated bindings and binary. This is separate from the JavaScript
 suite, which uses simulated WASM boundaries.
+
+### Native terrain measurement (development)
+
+Token-based gridded searches use v14's native terrain-path and movement measurement
+APIs when available. Reported `cost` and `maxDistance` include native movement costs;
+regions represented by infinite movement cost are impassable. The full candidate
+route is measured to preserve alternating-diagonal history. Native terrain routes
+retain their waypoints even with interpolation enabled.
+
+`ignoreTerrain: true` bypasses terrain measurement. Tokenless and gridless requests
+do not use native terrain costs. Region and RegionBehavior edits invalidate pending
+requests with `null`; callers can request a new route. Planning does not move tokens
+or execute region-entry scripts. Live Foundry correctness/performance testing remains
+required, particularly for large tokens and custom movement actions/cost rules.

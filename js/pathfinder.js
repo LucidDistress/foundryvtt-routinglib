@@ -1,12 +1,13 @@
 import {diagonalCost, isAlternating, exceedsBudget} from "./movement_cost.js";
 import {cache, stepCollidesWithWall} from "./cache.js";
 import {PriorityQueueSet} from "./data_structures.js";
-import {getCenterFromGridPositionObj} from "./foundry_fixes.js";
+import {getCenterFromGridPositionObj, getPixelsFromGridPositionObj} from "./foundry_fixes.js";
 import {
 	applyOffset,
 	buildOffset,
 	getAreaFromPositionAndShape,
 	getTokenShapeForTokenData,
+	getSnapPointForTokenDataObj,
 } from "./util.js";
 
 import * as GridlessPathfinding from "./gridless.js";
@@ -31,7 +32,11 @@ export class GriddedPathfinder {
 	reset() {
 		this.diagonalRule = canvas.grid.diagonals ?? CONST.GRID_DIAGONALS.EQUIDISTANT;
 		this.alternating = canvas.grid.type === CONST.GRID_TYPES.SQUARE && isAlternating(this.diagonalRule);
-		this.terrain = !!window.terrainRuler && !this.ignoreTerrain;
+		this.nativeTerrain = !this.ignoreTerrain && !!canvas.scene.levels
+			&& typeof this.token?.createTerrainMovementPath === "function"
+			&& typeof this.token?.measureMovementPath === "function"
+			&& typeof this.token?.document.getMovementOrigin === "function";
+		this.terrain = !this.nativeTerrain && !!window.terrainRuler && !this.ignoreTerrain;
 		this.nextNodes = new PriorityQueueSet(
 			(node1, node2) => node1.key === node2.key,
 			node => node.estimated,
@@ -77,7 +82,13 @@ export class GriddedPathfinder {
 				this.tokenData,
 			);
 			let cost;
-			if (window.terrainRuler && !this.ignoreTerrain) {
+			let nativeMeasurement;
+			if (this.nativeTerrain) {
+				nativeMeasurement = this.measureNativeRoute(currentNode, neighborNode);
+				cost = nativeMeasurement.cost - currentNode.cost;
+				if (cost < 0 && !exceedsBudget(currentNode.cost, nativeMeasurement.cost)) cost = 0;
+				if (cost < 0) throw new Error("RoutingLib does not support negative incremental movement costs.");
+			} else if (this.terrain) {
 				const offset = buildOffset(currentNode.node, neighbor);
 				cost = this.terrainCostForStep(tokenArea, offset, currentNode.cost);
 			} else {
@@ -87,7 +98,7 @@ export class GriddedPathfinder {
 
 			if (!Number.isFinite(cost) || cost < 0) continue;
 			cost += currentNode.cost;
-			const parity = this.terrain ? (cost % 1 >= 0.25 ? 1 : 0)
+			const parity = this.nativeTerrain ? nativeMeasurement.parity : this.terrain ? (cost % 1 >= 0.25 ? 1 : 0)
 				: (this.alternating && neighbor.isDiagonal ? 1 - currentNode.parity : currentNode.parity);
 			const key = this.stateKey(neighborNode, parity);
 			if (exceedsBudget(this.displayCost(cost), this.maxDistance) || cost >= (this.bestCosts.get(key) ?? Infinity)) continue;
@@ -136,7 +147,7 @@ export class GriddedPathfinder {
 		while (currentNode) {
 			// Preserve turns: removing them can change diagonal parity, measured cost,
 			// or create an illegal diagonal. Only collapse straight square-grid runs.
-			if (this.interpolate && !this.terrain && canvas.grid.type === CONST.GRID_TYPES.SQUARE && path.length >= 2) {
+			if (this.interpolate && !this.terrain && !this.nativeTerrain && canvas.grid.type === CONST.GRID_TYPES.SQUARE && path.length >= 2) {
 				const a = path[path.length - 2], b = path[path.length - 1], c = currentNode.node;
 				const dx1 = b.x - a.x, dy1 = b.y - a.y;
 				const dx2 = c.x - b.x, dy2 = c.y - b.y;
@@ -151,8 +162,31 @@ export class GriddedPathfinder {
 		return {path, cost};
 	}
 
+	measureNativeRoute(current, next) {
+		// Measure the whole prefix: independently measured edges would restart the
+		// alternating-diagonal count at every region boundary or grid step.
+		const positions = [next];
+		for (let entry = current; entry; entry = entry.previous) positions.push(entry.node);
+		positions.reverse();
+		const {width, height, depth, shape, elevation, level, action} = this.tokenData;
+		const pivot = this.token.document.getMovementOrigin({x: 0, y: 0,
+			elevation: 0, width, height, depth, shape});
+		const waypoints = positions.map(position => {
+			const center = getSnapPointForTokenDataObj(getPixelsFromGridPositionObj(position), this.tokenData);
+			return {x: center.x - pivot.x, y: center.y - pivot.y,
+				elevation, width, height, depth, shape, level, action};
+		});
+		const regionalized = this.token.createTerrainMovementPath(waypoints, {preview: false});
+		const measurement = this.token.measureMovementPath(regionalized, {preview: false});
+		const cost = measurement.cost / canvas.dimensions.distance;
+		if (Number.isNaN(cost) || cost < 0 || !Number.isInteger(measurement.diagonals) || measurement.diagonals < 0) {
+			throw new Error("Foundry returned an invalid movement measurement.");
+		}
+		return {cost, parity: measurement.diagonals % 2};
+	}
+
 	stateKey(node, parity) {
-		return `${node.x},${node.y},${this.alternating || this.terrain ? parity : 0}`;
+		return `${node.x},${node.y},${this.alternating || this.terrain || this.nativeTerrain ? parity : 0}`;
 	}
 
 	displayCost(cost) {
@@ -163,7 +197,7 @@ export class GriddedPathfinder {
 	estimateCost(pos, target) {
 		// Zero is conservative for hex offset coordinates, terrain and alternating
 		// diagonals; these must not overestimate a remaining route.
-		if (canvas.grid.type !== CONST.GRID_TYPES.SQUARE || this.terrain || this.alternating) return 0;
+		if (canvas.grid.type !== CONST.GRID_TYPES.SQUARE || this.terrain || this.nativeTerrain || this.alternating) return 0;
 		const dx = Math.abs(pos.x - target.x), dy = Math.abs(pos.y - target.y);
 		const d = diagonalCost(this.diagonalRule);
 		return Math.max(dx, dy) + Math.min(dx, dy) * (Math.min(d, 2) - 1);

@@ -31,7 +31,8 @@ function initializePathfinder(from, to, options) {
 		}
 		tokenData = {width: token.document.width, height: token.document.height, token,
 			depth: token.document._source?.depth ?? token.document.depth,
-			shape: token.document._source?.shape ?? token.document.shape};
+			shape: token.document._source?.shape ?? token.document.shape,
+			action: token.document.movementAction};
 		if (elevation == null) {
 			elevation =
 				!canvas.scene.levels && isModuleActive("wall-height") && token.losHeight != null
@@ -156,7 +157,7 @@ function initializeIfReady() {
 	// resume them with a changed document and stale collision context.
 	Hooks.on("updateToken", (token, changes) => {
 		if (token.parent?.id !== canvas.scene?.id) return;
-		const fields = ["width", "height", "depth", "shape", "elevation", "level", "flags"];
+		const fields = ["width", "height", "depth", "shape", "elevation", "level", "movementAction", "flags"];
 		if (Object.keys(changes).some(key => fields.includes(key.split(".")[0]))) {
 			invalidateJobs();
 			initializeCaches();
@@ -168,6 +169,15 @@ function initializeIfReady() {
 			invalidateJobs();
 			initializeCaches();
 		});
+	}
+	const onRegionChange = document => {
+		const scene = document.documentName === "RegionBehavior" ? document.parent?.parent : document.parent;
+		if (scene?.id !== canvas.scene?.id) return;
+		invalidateJobs();
+		initializeCaches();
+	};
+	for (const name of ["Region", "RegionBehavior"]) {
+		for (const operation of ["create", "update", "delete"]) Hooks.on(`${operation}${name}`, onRegionChange);
 	}
 	Hooks.on("updateScene", (scene, changes) => {
 		if (scene.id !== canvas.scene?.id) return;

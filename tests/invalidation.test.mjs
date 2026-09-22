@@ -39,4 +39,10 @@ test('hooks scope wall changes to active scene and invalidate dotted grid update
  assert.equal(calls.invalidate,5);
  for(const event of ['createLevel','updateLevel','deleteLevel'])hooks.get(event)({parent:{id:'active'}});
  assert.equal(calls.invalidate,8);
+ for(const name of ['Region','RegionBehavior'])for(const operation of ['create','update','delete']){
+  const event=hooks.get(operation+name);
+  const doc=id=>({documentName:name,parent:name==='RegionBehavior'?{parent:{id}}:{id}});
+  const previous=calls.invalidate;event(doc('other'));assert.equal(calls.invalidate,previous);
+  event(doc('active'));assert.equal(calls.invalidate,previous+1);
+ }
 });
