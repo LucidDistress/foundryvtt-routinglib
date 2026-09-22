@@ -33,7 +33,7 @@ test('scheduler isolates step, postprocessing and cleanup failures', async () =>
 });
 
 test('coordinate adapters preserve asymmetric coordinates and Foundry row/column order', async () => {
- globalThis.CONST={GRID_TYPES:{GRIDLESS:0,SQUARE:1},GRID_DIAGONALS:{ALTERNATING_1:1}};
+ globalThis.CONST={GRID_TYPES:{GRIDLESS:0,SQUARE:1},GRID_DIAGONALS:{EQUIDISTANT:0,EXACT:1,APPROXIMATE:2,RECTILINEAR:3,ALTERNATING_1:4,ALTERNATING_2:5,ILLEGAL:6}};
  globalThis.canvas={grid:{type:1,
   getTopLeftPoint:({i,j})=>({x:j*100,y:i*100}),
   getCenterPoint:({i,j})=>({x:j*100+50,y:i*100+50}),
@@ -52,7 +52,7 @@ test('coordinate adapters preserve asymmetric coordinates and Foundry row/column
 });
 
 test('exact diagonal budgets and gridless reset handle', async()=>{
- globalThis.CONST={GRID_TYPES:{GRIDLESS:0,SQUARE:1},GRID_DIAGONALS:{ALTERNATING_1:1}};
+ globalThis.CONST={GRID_TYPES:{GRIDLESS:0,SQUARE:1},GRID_DIAGONALS:{EQUIDISTANT:0,EXACT:1,APPROXIMATE:2,RECTILINEAR:3,ALTERNATING_1:4,ALTERNATING_2:5,ILLEGAL:6}};
  globalThis.game={system:{id:'dnd5e'}};
  globalThis.window={};
  globalThis.canvas={grid:{type:1,sizeX:100,sizeY:100},scene:{grid:{type:1},dimensions:{distance:5}},dimensions:{width:1000,height:1000,distance:5}};
@@ -61,11 +61,11 @@ test('exact diagonal budgets and gridless reset handle', async()=>{
  globalThis.__routingResetHandle=null;
  let code=await source('pathfinder.js');
  code=code.replace('import {cache, stepCollidesWithWall} from "./cache.js";', 'const cache=globalThis.__routingTestCache; const stepCollidesWithWall=()=>false;');
- for(const name of ['data_structures.js','foundry_fixes.js','util.js']) code=code.replace('./'+name,moduleURL(await source(name)));
+ for(const name of ['data_structures.js','foundry_fixes.js','util.js','movement_cost.js']) code=code.replace('./'+name,moduleURL(await source(name)));
  code=code.replace('import * as GridlessPathfinding from "../wasm/gridless_pathfinding.js";', 'const GridlessPathfinding={initializePathfinder:()=>123,resetPathfinder:h=>{globalThis.__routingResetHandle=h;}};');
  const {GriddedPathfinder,GridlessPathfinder}=await import(moduleURL(code));
  for(const alternating of [false,true]) {
-  canvas.grid.diagonals=alternating?1:0;
+  canvas.grid.diagonals=alternating?4:0;
   for(const [budget,expected] of [[4,null],[5,5]]) {
    const p=new GriddedPathfinder(0,0,{x:0,y:0},{x:1,y:1},null,{width:1,height:1},{maxDistance:budget,interpolate:false});
    let result;for(let i=0;i<10&&result===undefined;i++)result=p.step();

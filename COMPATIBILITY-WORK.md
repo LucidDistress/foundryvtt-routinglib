@@ -27,8 +27,8 @@ until a release is actually built and published in this fork.
 - Integrate native v14 movement levels, region restrictions/costs, and token shapes.
   Current collision changes only modernize the source constructor; they do not
   establish v14 movement compatibility.
-- Review all diagonal modes and alternating-diagonal search state/heuristic.
-- Correct gridless pixel-versus-scene-unit distance semantics with compatibility tests.
+- Verify diagonal rules in Foundry after the isolated distance regression suite.
+- Rebuild/fix Rust gridless exact-boundary costs; scene-unit conversion is implemented as an opt-in compatibility option.
 - Test hex token sizes/orientations, narrow passages, one-way walls, doors,
   scene switching, and Rideable in Foundry.
 - Validate cache identity for different token sizes, elevation, and native levels.
@@ -45,3 +45,17 @@ Reviewed ideas from ByteBard97 (gridless reset and grid-change invalidation),
 tatsumasagc (modern grid APIs), and IronWarjack (release packaging).
 The implementation retains upstream module identity and attribution; entire forks
 and their experimental collision replacements were not merged.
+
+## Batch 2: movement costs
+- Follow all seven scene diagonal rules without a system-ID override.
+- Keep alternating-diagonal parity in the search state and allow cheaper states to reopen.
+- Preserve fractional costs and use roundoff-only budget tolerance.
+- Use conservative heuristics for alternating, terrain and hex searches; these may
+  expand more nodes but cannot discard a shorter route based on an overestimate.
+- Preserve turns during interpolation; retain terrain/hex waypoints.
+- Add opt-in scene-unit gridless budgets/results while retaining legacy pixel defaults.
+- Compare routes to independent exhaustive relaxation across 40 obstructed grids and
+  all seven rules, including exact/just-under budgets. WASM conversion tests use a
+  boundary stub and are not an execution test of the Rust binary.
+
+Run all checks with `node --test tests/*.test.mjs`.

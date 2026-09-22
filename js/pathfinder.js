@@ -1,3 +1,4 @@
+import {diagonalCost, isAlternating, exceedsBudget} from "./movement_cost.js";
 import {cache, stepCollidesWithWall} from "./cache.js";
 import {PriorityQueueSet} from "./data_structures.js";
 import {getCenterFromGridPositionObj} from "./foundry_fixes.js";
@@ -6,7 +7,6 @@ import {
 	buildOffset,
 	getAreaFromPositionAndShape,
 	getTokenShapeForTokenData,
-	nodeId,
 } from "./util.js";
 
 import * as GridlessPathfinding from "../wasm/gridless_pathfinding.js";
@@ -29,12 +29,14 @@ export class GriddedPathfinder {
 	}
 
 	reset() {
-		this.use5105 = game.system.id === "pf2e" || canvas.grid.diagonals === CONST.GRID_DIAGONALS.ALTERNATING_1;
+		this.diagonalRule = canvas.grid.diagonals ?? CONST.GRID_DIAGONALS.EQUIDISTANT;
+		this.alternating = canvas.grid.type === CONST.GRID_TYPES.SQUARE && isAlternating(this.diagonalRule);
+		this.terrain = !!window.terrainRuler && !this.ignoreTerrain;
 		this.nextNodes = new PriorityQueueSet(
-			(node1, node2) => node1.node === node2.node,
+			(node1, node2) => node1.key === node2.key,
 			node => node.estimated,
 		);
-		this.previousNodes = new Set();
+		this.bestCosts = new Map();
 		this.gridWidth = Math.ceil(canvas.dimensions.width / canvas.grid.sizeX);
 		this.gridHeight = Math.ceil(canvas.dimensions.height / canvas.grid.sizeY);
 		this.startNode = cache.getInitializedNode(
@@ -43,7 +45,11 @@ export class GriddedPathfinder {
 			this.levelIndex,
 			this.tokenData,
 		);
+		const key = this.stateKey(this.startNode, 0);
+		this.bestCosts.set(key, this.startCost);
 		this.nextNodes.pushWithPriority({
+			key,
+			parity: 0,
 			node: this.startNode,
 			cost: this.startCost,
 			estimated: this.startCost + this.estimateCost(this.startPos, this.targetPos),
@@ -56,13 +62,12 @@ export class GriddedPathfinder {
 		if (!currentNode) {
 			return null;
 		}
-		if (Math.floor(currentNode.cost) > this.maxDistance) {
+		if (exceedsBudget(this.displayCost(currentNode.cost), this.maxDistance) || currentNode.cost > this.bestCosts.get(currentNode.key)) {
 			return undefined;
 		}
 		if (currentNode.node.x === this.targetPos.x && currentNode.node.y === this.targetPos.y) {
 			return currentNode;
 		}
-		this.previousNodes.add(nodeId(currentNode.node));
 		const tokenArea = getAreaFromPositionAndShape(currentNode.node, this.tokenShape);
 		for (const neighbor of currentNode.node.neighbors) {
 			const neighborNode = cache.getInitializedNode(
@@ -71,20 +76,25 @@ export class GriddedPathfinder {
 				this.levelIndex,
 				this.tokenData,
 			);
-			if (this.previousNodes.has(nodeId(neighborNode))) {
-				continue;
-			}
 			let cost;
 			if (window.terrainRuler && !this.ignoreTerrain) {
 				const offset = buildOffset(currentNode.node, neighbor);
 				cost = this.terrainCostForStep(tokenArea, offset, currentNode.cost);
 			} else {
 				// Keep tie-breaking out of movement cost so exact-distance routes remain reachable.
-				cost = neighbor.isDiagonal ? (this.use5105 ? 1.5 : 1) : 1;
+				cost = neighbor.isDiagonal ? diagonalCost(this.diagonalRule, currentNode.parity) : 1;
 			}
 
+			if (!Number.isFinite(cost) || cost < 0) continue;
 			cost += currentNode.cost;
+			const parity = this.terrain ? (cost % 1 >= 0.25 ? 1 : 0)
+				: (this.alternating && neighbor.isDiagonal ? 1 - currentNode.parity : currentNode.parity);
+			const key = this.stateKey(neighborNode, parity);
+			if (exceedsBudget(this.displayCost(cost), this.maxDistance) || cost >= (this.bestCosts.get(key) ?? Infinity)) continue;
+			this.bestCosts.set(key, cost);
 			this.nextNodes.pushWithPriority({
+				key,
+				parity,
 				node: neighborNode,
 				cost: cost,
 				estimated: cost + this.estimateCost(neighborNode, this.targetPos),
@@ -121,42 +131,17 @@ export class GriddedPathfinder {
 
 	postProcessResult(firstNode) {
 		const path = [];
-		const cost = Math.floor(firstNode.cost) * canvas.dimensions.distance;
+		const cost = this.displayCost(firstNode.cost) * canvas.dimensions.distance;
 		let currentNode = firstNode;
 		while (currentNode) {
-			if (this.interpolate) {
-				if (
-					path.length >= 2 &&
-					!stepCollidesWithWall(path[path.length - 2], currentNode.node, this.tokenData)
-				) {
-					// Replace last waypoint if the current waypoint leads to a valid path that isn't longer than the old path
-					if (window.terrainRuler && !this.ignoreTerrain) {
-						const startNode = path[path.length - 2];
-						const middleNode = path[path.length - 1];
-						const endNode = currentNode.node;
-
-						const startArea = getAreaFromPositionAndShape(startNode, this.tokenShape);
-						const startMiddleOffset = {
-							x: middleNode.x - startNode.x,
-							y: middleNode.y - startNode.y,
-						};
-						const startEndOffset = buildOffset(startNode, endNode);
-						const middleArea = getAreaFromPositionAndShape(middleNode, this.tokenShape);
-						const middleEndOffset = buildOffset(middleNode, endNode);
-
-						// TODO Cache the measurement for use in the next loop to improve performance - this can possibly be done withing terrainCostForStep
-						const middleDistance = this.terrainCostForStep(startArea, startMiddleOffset);
-						const oldDistance =
-							middleDistance + this.terrainCostForStep(middleArea, middleEndOffset, middleDistance);
-						const newDistance = this.terrainCostForStep(startArea, startEndOffset);
-
-						if (newDistance <= oldDistance) {
-							path.pop();
-						}
-					} else {
-						path.pop();
-					}
-				}
+			// Preserve turns: removing them can change diagonal parity, measured cost,
+			// or create an illegal diagonal. Only collapse straight square-grid runs.
+			if (this.interpolate && !this.terrain && canvas.grid.type === CONST.GRID_TYPES.SQUARE && path.length >= 2) {
+				const a = path[path.length - 2], b = path[path.length - 1], c = currentNode.node;
+				const dx1 = b.x - a.x, dy1 = b.y - a.y;
+				const dx2 = c.x - b.x, dy2 = c.y - b.y;
+				if (dx1 * dy2 === dy1 * dx2 && dx1 * dx2 + dy1 * dy2 > 0
+					&& !stepCollidesWithWall(c, a, this.tokenData)) path.pop();
 			}
 
 			path.push({x: currentNode.node.x, y: currentNode.node.y});
@@ -166,14 +151,22 @@ export class GriddedPathfinder {
 		return {path, cost};
 	}
 
-	/**
-	 * Estimate the travel distance between two points, as the crow flies. Most of the time, this is 1
-	 * per space, but for a square grid using 5-10-5 diagonals, count each diagonal as an extra 0.5
-	 */
+	stateKey(node, parity) {
+		return `${node.x},${node.y},${this.alternating || this.terrain ? parity : 0}`;
+	}
+
+	displayCost(cost) {
+		// Legacy terrain-ruler encodes its pending diagonal as a half-space.
+		return this.terrain ? Math.floor(cost) : cost;
+	}
+
 	estimateCost(pos, target) {
-		const distX = Math.abs(pos.x - target.x);
-		const distY = Math.abs(pos.y - target.y);
-		return Math.max(distX, distY) + (this.use5105 ? Math.min(distX, distY) * 0.5 : 0);
+		// Zero is conservative for hex offset coordinates, terrain and alternating
+		// diagonals; these must not overestimate a remaining route.
+		if (canvas.grid.type !== CONST.GRID_TYPES.SQUARE || this.terrain || this.alternating) return 0;
+		const dx = Math.abs(pos.x - target.x), dy = Math.abs(pos.y - target.y);
+		const d = diagonalCost(this.diagonalRule);
+		return Math.max(dx, dy) + Math.min(dx, dy) * (Math.min(d, 2) - 1);
 	}
 
 	free() {
@@ -186,9 +179,12 @@ export class GridlessPathfinder {
 		this.getGraph = getGraph;
 		this.from = from;
 		this.to = to;
-		this.maxDistance = options.maxDistance ?? Infinity;
-		const maxDistance = options.maxDistance ?? Infinity;
-		this.pathfinder = GridlessPathfinding.initializePathfinder(from, to, graph, maxDistance);
+		this.distanceUnits = options.gridlessDistanceUnits ?? "pixels";
+		if (!["pixels", "scene"].includes(this.distanceUnits)) throw new RangeError("gridlessDistanceUnits must be pixels or scene.");
+		this.unitsPerPixel = this.distanceUnits === "scene" ? canvas.dimensions.distance / canvas.grid.size : 1;
+		if (!(this.unitsPerPixel > 0) || !Number.isFinite(this.unitsPerPixel)) throw new RangeError("Invalid scene distance scale.");
+		this.maxDistance = (options.maxDistance ?? Infinity) / this.unitsPerPixel;
+		this.pathfinder = GridlessPathfinding.initializePathfinder(from, to, graph, this.maxDistance);
 	}
 
 	reset() {
@@ -205,8 +201,8 @@ export class GridlessPathfinder {
 	}
 
 	postProcessResult(result) {
-		// The rust code already does everything that's necessary, so just return the result
-		return result;
+		// Coordinates remain pixels; only distance and budget units are converted.
+		return {...result, cost: result.cost * this.unitsPerPixel};
 	}
 
 	free() {

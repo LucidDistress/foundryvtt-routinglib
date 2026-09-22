@@ -98,3 +98,29 @@ To build a custom release, simply execute the Python script `build_release.py`. 
 ### Building the WebAssembly component for development purposes
 If you're interested in modifying routinglib, you'll need to pouplate your working directory with the required WebAssembly files. To do this, execute `./build_wasm.py --debug`. This script will build the rust code and will store the resulting WebAssembly into the `wasm/` folder, which is the location foundry expects them to be in when it tries to load those components. The pyton script will remain active after the build has finished and will watch for changes in the Rust code. If the Rust code is modified, the script will automatically re-build the WebAssembly, to ensure you're always testing with the most up-to-date code as possible.
 
+
+
+### Movement-distance compatibility (development)
+
+Square-grid routing follows the scene's diagonal rule, including exact, approximate,
+rectilinear, both alternating sequences, and prohibited diagonals. Fractional costs
+are retained. Each search starts with zero prior diagonals; movement already spent
+before the request is not included. Interpolation only removes collinear square-grid
+waypoints, preserving turns and movement costs. Terrain routes and hex routes retain
+all waypoints for correctness.
+
+Gridless coordinates always remain pixels. For compatibility, gridless `cost` and
+`maxDistance` still default to pixels. Pass `gridlessDistanceUnits: "scene"` to express
+both in the scene's distance units (such as feet), matching gridded routing:
+
+```js
+await routinglib.calculatePath(startPixel, endPixel, {
+  token,
+  maxDistance: 30,
+  gridlessDistanceUnits: "scene"
+});
+```
+
+`gridlessDistanceUnits: "pixels"` explicitly requests legacy behavior. This option
+only applies to gridless scenes. The WASM engine's small per-edge cost penalty remains;
+exact-boundary gridless tests require a subsequent Rust rebuild/fix.
