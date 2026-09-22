@@ -13,7 +13,7 @@ let code=await readFile(new URL('../js/cache.js',import.meta.url),'utf8');
 code=code.replace('import {resetJobs} from "./background.js";','const resetJobs=()=>globalThis.__cacheCounts.reset++;');
 code=code.replace('import {getPixelsFromGridPositionObj} from "./foundry_fixes.js";','const getPixelsFromGridPositionObj=p=>p;');
 code=code.replace('import {getSnapPointForTokenDataObj, isModuleActive} from "./util.js";','const getSnapPointForTokenDataObj=p=>p; const isModuleActive=()=>false;');
-code=code.replace('import * as GridlessPathfinding from "../wasm/gridless_pathfinding.js";',`const GridlessPathfinding={initializeGraph:(...args)=>{const c=globalThis.__cacheCounts;c.created.push(args);return c.created.length;},freeGraph:g=>globalThis.__cacheCounts.freed.push(g)};`);
+code=code.replace('import * as GridlessPathfinding from "./gridless.js";',`const GridlessPathfinding={initializeGraph:(...args)=>{const c=globalThis.__cacheCounts;c.created.push(args);return c.created.length;},freeGraph:g=>globalThis.__cacheCounts.freed.push(g)};`);
 // Keep actual cache construction, keys, adjacency and reset/disposal code; inject a
 // deterministic collision oracle which changes at an exact elevation boundary.
 code=code.slice(0,code.indexOf('export function stepCollidesWithWall'))+`export function stepCollidesWithWall(from,to,data){globalThis.__cacheCounts.collision++;return data.elevation===10;}`;

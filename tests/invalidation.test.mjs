@@ -19,7 +19,7 @@ test('hooks scope wall changes to active scene and invalidate dotted grid update
  const getAltOrientationFlagForToken=()=>false,getHexTokenSize=()=>1,isModuleActive=()=>false;
  `+code;
  await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
- await once.get('init')();await once.get('ready')();
+ await once.get('init')();await once.get('ready')();await new Promise(resolve=>setImmediate(resolve));
  for(const event of ['createWall','updateWall','deleteWall']){
   hooks.get(event)({parent:{id:'other'}});assert.equal(calls.wipe,0);
  }

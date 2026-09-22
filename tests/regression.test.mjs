@@ -62,7 +62,7 @@ test('exact diagonal budgets and gridless reset handle', async()=>{
  let code=await source('pathfinder.js');
  code=code.replace('import {cache, stepCollidesWithWall} from "./cache.js";', 'const cache=globalThis.__routingTestCache; const stepCollidesWithWall=()=>false;');
  for(const name of ['data_structures.js','foundry_fixes.js','util.js','movement_cost.js']) code=code.replace('./'+name,moduleURL(await source(name)));
- code=code.replace('import * as GridlessPathfinding from "../wasm/gridless_pathfinding.js";', 'const GridlessPathfinding={initializePathfinder:()=>123,resetPathfinder:h=>{globalThis.__routingResetHandle=h;}};');
+ code=code.replace('import * as GridlessPathfinding from "./gridless.js";', 'const GridlessPathfinding={initializePathfinder:()=>123,resetPathfinder:h=>{globalThis.__routingResetHandle=h;}};');
  const {GriddedPathfinder,GridlessPathfinder}=await import(moduleURL(code));
  for(const alternating of [false,true]) {
   canvas.grid.diagonals=alternating?4:0;
@@ -82,4 +82,17 @@ test('scene invalidation frees queued searches once and resolves no route', asyn
  let frees=0; let steps=0;
  const p=scheduler.createAsyncPathfinder({step(){steps++;},free(){frees++;}});
  scheduler.invalidateJobs();assert.equal(await p,null);assert.equal(frees,1);assert.equal(steps,0);
+});
+
+
+test('cancellation removes a job even when cleanup throws and preserves promise identity',async()=>{
+ globalThis.window={setTimeout,clearTimeout};
+ const scheduler=await load('background.js');scheduler.initializeBackground();
+ let steps=0,frees=0;
+ const p=scheduler.createAsyncPathfinder({step(){steps++;},free(){frees++;throw new Error('cleanup failed');}});
+ const rejection=assert.rejects(p,/cleanup failed/);
+ assert.equal(scheduler.cancelJob(p),true);assert.equal(scheduler.cancelJob(p),false);
+ await rejection;
+ const good=scheduler.createAsyncPathfinder({step:()=>1,postProcessResult:x=>x,free(){}});
+ assert.equal(await good,1);assert.equal(steps,0);assert.equal(frees,1);
 });

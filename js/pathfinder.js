@@ -9,7 +9,7 @@ import {
 	getTokenShapeForTokenData,
 } from "./util.js";
 
-import * as GridlessPathfinding from "../wasm/gridless_pathfinding.js";
+import * as GridlessPathfinding from "./gridless.js";
 
 export class GriddedPathfinder {
 	constructor(sizeIndex, levelIndex, from, to, token, tokenData, options) {

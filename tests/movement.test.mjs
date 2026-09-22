@@ -13,7 +13,7 @@ globalThis.__distanceWasm={initializePathfinder:(from,to,graph,max)=>{calls.push
 let code=await read('pathfinder.js');
 code=code.replace('import {cache, stepCollidesWithWall} from "./cache.js";','const cache=globalThis.__distanceCache; const stepCollidesWithWall=()=>false;');
 for(const name of ['movement_cost.js','data_structures.js','foundry_fixes.js','util.js'])code=code.replace('./'+name,url(await read(name)));
-code=code.replace('import * as GridlessPathfinding from "../wasm/gridless_pathfinding.js";','const GridlessPathfinding=globalThis.__distanceWasm;');
+code=code.replace('import * as GridlessPathfinding from "./gridless.js";','const GridlessPathfinding=globalThis.__distanceWasm;');
 const {GriddedPathfinder,GridlessPathfinder}=await import(url(code));
 function board(blocked=new Set()) {
  nodes=new Map();

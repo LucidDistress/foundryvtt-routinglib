@@ -2,7 +2,7 @@ import {resetJobs} from "./background.js";
 import {getPixelsFromGridPositionObj} from "./foundry_fixes.js";
 import {getSnapPointForTokenDataObj, isModuleActive} from "./util.js";
 
-import * as GridlessPathfinding from "../wasm/gridless_pathfinding.js";
+import * as GridlessPathfinding from "./gridless.js";
 
 export let cache;
 

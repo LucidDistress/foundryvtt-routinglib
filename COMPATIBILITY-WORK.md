@@ -75,3 +75,19 @@ footprint collision checks or native v14 levels/regions. Cache tests inject coll
 and WASM boundaries. Hook tests use simulated Foundry events. Live integration and
 WASM execution remain pending. Exact elevation keys trade some reuse for correctness;
 caches are cleared on geometry changes and scene transitions.
+
+## Batch 4: startup and cancellation
+- Load generated gridless bindings dynamically so missing/broken WASM assets no
+  longer prevent the JavaScript gridded API from loading.
+- Publish the ready hook once after Foundry is ready and engine initialization
+  settles; log a gridless load failure and reject gridless requests explicitly.
+- Add `routinglib.isGridlessAvailable()` for callers to check the optional engine.
+- Async request validation rejects a promise instead of throwing synchronously;
+  valid requests retain their exact promise identity for cancellation.
+- Cancelled jobs leave the queue before cleanup; cleanup failure rejects only that
+  job and cannot strand or execute it later. Successful explicit cancellation keeps
+  the existing unresolved-promise behavior.
+- Invalidate pending work at canvas teardown as well as initialization.
+
+Startup tests simulate missing assets, binding delegation, ready ordering, request
+validation and teardown. Actual WASM compilation and live Foundry remain pending.

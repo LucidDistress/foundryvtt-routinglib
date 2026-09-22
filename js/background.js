@@ -22,8 +22,14 @@ export function createAsyncPathfinder(pathfinder) {
 export function cancelJob(promise) {
 	for (const [i, job] of pathfindingJobs.entries()) {
 		if (job.promise === promise) {
-			job.pathfinder.free();
+			// Detach first; a failing free must never leave the job runnable.
 			pathfindingJobs.splice(i, 1);
+			if (!pathfindingJobs.length && timeout !== null) {
+				window.clearTimeout(timeout);
+				timeout = null;
+			}
+			try { job.pathfinder.free(); }
+			catch (error) { job.reject(error); }
 			return true;
 		}
 	}

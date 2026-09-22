@@ -124,3 +124,11 @@ await routinglib.calculatePath(startPixel, endPixel, {
 `gridlessDistanceUnits: "pixels"` explicitly requests legacy behavior. This option
 only applies to gridless scenes. The WASM engine's small per-edge cost penalty remains;
 exact-boundary gridless tests require a subsequent Rust rebuild/fix.
+
+### Optional gridless engine
+
+After `routinglib.ready`, call `routinglib.isGridlessAvailable()` to check whether
+WASM loaded. If its assets are missing or fail to initialize, the gridded API still
+loads and gridless requests fail with an explicit error. Install a complete release
+and reload Foundry to restore gridless support. `calculatePath` reports invalid
+requests as rejected promises; `calculatePathBlocking` throws synchronously.

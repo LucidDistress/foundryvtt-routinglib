@@ -2,11 +2,13 @@ import {initializeBackground, createAsyncPathfinder, cancelJob, invalidateJobs} 
 import {cache, GriddedCache, initializeCaches, wipeCaches, disposeCaches} from "./cache.js";
 import {GriddedPathfinder, GridlessPathfinder} from "./pathfinder.js";
 
-import initGridlessPathfinding from "../wasm/gridless_pathfinding.js";
+import initGridlessPathfinding from "./gridless.js";
 import {getAltOrientationFlagForToken, getHexTokenSize, isModuleActive} from "./util.js";
 
 let foundryReady = false;
-let wasmReady = false;
+let wasmSettled = false;
+let wasmAvailable = false;
+let initialized = false;
 
 function initializePathfinder(from, to, options) {
 	if (!canvas?.ready || !cache) throw new Error("RoutingLib requires a ready scene.");
@@ -52,6 +54,7 @@ function initializePathfinder(from, to, options) {
 
 	const levelIndex = cache.getLevelIndexForElevation(elevation);
 	if (canvas.grid.type === CONST.GRID_TYPES.GRIDLESS) {
+		if (!wasmAvailable) throw new Error("RoutingLib gridless engine is unavailable; install the WASM assets and reload Foundry.");
 		const tokenSize = Math.max(tokenData.width, tokenData.height);
 		// Reacquire the graph after wall changes: resetting the Rust search alone
 		// retains its old graph and therefore its old obstacles.
@@ -64,8 +67,12 @@ function initializePathfinder(from, to, options) {
 }
 
 function calculatePath(from, to, options = {}) {
-	const pathfinder = initializePathfinder(from, to, options);
-	return createAsyncPathfinder(pathfinder);
+	// Do not mark this function async: callers cancel using this exact promise.
+	try {
+		return createAsyncPathfinder(initializePathfinder(from, to, options));
+	} catch (error) {
+		return Promise.reject(error);
+	}
 }
 
 function calculatePathBlocking(from, to, options = {}) {
@@ -103,20 +110,27 @@ Hooks.once("ready", async () => {
 });
 
 initGridlessPathfinding().then(() => {
-	wasmReady = true;
+	wasmAvailable = true;
+}, error => {
+	console.warn("RoutingLib: gridless engine failed to load; gridded routing remains available.", error);
+}).then(() => {
+	wasmSettled = true;
 	initializeIfReady();
 });
 
 function initializeIfReady() {
-	if (!foundryReady || !wasmReady) return;
+	if (initialized || !foundryReady || !wasmSettled) return;
+	initialized = true;
 	initializeCaches();
 	initializeBackground();
-	window.routinglib = {calculatePath, calculatePathBlocking, cancelPathfinding};
+	window.routinglib = {calculatePath, calculatePathBlocking, cancelPathfinding, isGridlessAvailable: () => wasmAvailable};
 
-	Hooks.on("canvasInit", () => {
+	const clearScene = () => {
 		invalidateJobs();
 		disposeCaches();
-	});
+	};
+	Hooks.on("canvasTearDown", clearScene);
+	Hooks.on("canvasInit", clearScene);
 	Hooks.on("canvasReady", initializeCaches);
 	const onWallChange = wall => {
 		if (wall.parent?.id === canvas.scene?.id) wipeCaches();
