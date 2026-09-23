@@ -1,6 +1,6 @@
 import {PriorityQueueSet} from "./data_structures.js";
 import {stepCollidesWithWall} from "./cache.js";
-import {getNativeMovementWaypoint} from "./util.js";
+import {getNativeMovementWaypoint, nativeRouteIsComplete} from "./util.js";
 import {exceedsBudget} from "./movement_cost.js";
 
 // A visibility-graph search for v14 scenes. Candidate corners approximate a route
@@ -109,7 +109,9 @@ export class NativeGridlessPathfinder {
 	}
 
 	postProcessResult(node) {
-		return {path: this.path(node), cost: node.cost / (this.units === "pixels" ? this.sceneUnitsPerPixel : 1)};
+		const path = this.path(node);
+		if (!nativeRouteIsComplete(path, this.tokenData)) return null;
+		return {path, cost: node.cost / (this.units === "pixels" ? this.sceneUnitsPerPixel : 1)};
 	}
 
 	free() {

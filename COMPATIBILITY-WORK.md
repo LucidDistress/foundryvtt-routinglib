@@ -274,3 +274,15 @@ custom history-dependent rules remain unsupported. Native collision governs toke
 clearance (no additional swept-footprint guarantee). Vertical routes are outside the
 2D API. Large scenes need live profiling; the new implementation favors correctness
 over the legacy Rust graph's speed.
+
+## Batch 14: final native route validation
+- Recheck complete token routes with native movement constraints before returning
+  them. Reject partial/adjusted results even when individual graph edges passed;
+  Foundry carries wall-boundary adjustment state across a multi-segment path.
+- Apply this check to gridded and native gridless token routes without moving tokens
+  or executing region-entry events. A rejected complete route returns null; the
+  search does not currently reopen alternative paths after this final check.
+
+Validation: 39 JS tests pass, including segment-safe/full-path-constrained cases and
+native gridless result rejection. Native collision and custom movement behavior
+still need live Foundry verification.

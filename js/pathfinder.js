@@ -8,6 +8,7 @@ import {
 	getAreaFromPositionAndShape,
 	getTokenShapeForTokenData,
 	getNativeMovementWaypoint,
+	nativeRouteIsComplete,
 } from "./util.js";
 
 import * as GridlessPathfinding from "./gridless.js";
@@ -163,6 +164,7 @@ export class GriddedPathfinder {
 			currentNode = currentNode.previous;
 		}
 		path.reverse();
+		if (!nativeRouteIsComplete(path, {...this.tokenData, token: this.token})) return null;
 		return {path, cost};
 	}
 

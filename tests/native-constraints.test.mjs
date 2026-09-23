@@ -10,7 +10,7 @@ code=code.replace('import {resetJobs} from "./background.js";','const resetJobs=
 code=code.replace('./foundry_fixes.js',coordinates).replace('./util.js',utility);
 code=code.replace('import * as GridlessPathfinding from "./gridless.js";','const GridlessPathfinding={};');
 const {stepCollidesWithWall:collides,GriddedCache}=await import(url(code));
-const {getNativeMovementWaypoint}=await import(utility);
+const {getNativeMovementWaypoint,nativeRouteIsComplete}=await import(utility);
 globalThis.CONST={GRID_TYPES:{GRIDLESS:0,SQUARE:1}};
 globalThis.PIXI={Point:class{constructor(x,y){this.x=x;this.y=y;}}};
 globalThis.canvas={scene:{levels:new Map([['ground',{id:'ground'}]])},grid:{type:1,size:100,sizeX:100,sizeY:100,
@@ -57,4 +57,17 @@ test('cached walk and teleport edges remain separate for the same token',()=>{
  const walk=cache.getInitializedNode({x:2,y:3},3,10,d);
  const teleport=cache.getInitializedNode({x:2,y:3},3,10,{...d,action:'teleport'});
  assert.equal(walk.neighbors.length,0);assert.equal(teleport.neighbors.length,1);
+});
+
+test('complete-route validation rejects native adjustments that independent segments can miss',()=>{
+ const d=fixture(),positions=[{x:2,y:3},{x:3,y:3},{x:3,y:4}];
+ let seen;
+ d.token.constrainMovementPath=p=>{seen=p;return [p,p.length>2];};
+ assert.equal(collides(positions[0],positions[1],d),false);
+ assert.equal(collides(positions[1],positions[2],d),false);
+ assert.equal(nativeRouteIsComplete(positions,d),false);
+ assert.equal(seen.length,3);
+ d.token.constrainMovementPath=p=>[p,false];
+ assert.equal(nativeRouteIsComplete(positions,d),true);
+ assert.equal(nativeRouteIsComplete([positions[0]],d),true);
 });

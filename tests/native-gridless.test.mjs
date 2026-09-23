@@ -87,3 +87,11 @@ test('native gridless supports tokenless geometry and rejects invalid configurat
  assert.throws(()=>run(data,{gridlessDistanceUnits:'feet'}),/pixels or scene/);
  game.settings.get=()=>NaN;assert.throws(()=>run(data),/ratio|Ratio/);
 });
+
+test('native gridless never returns a full route rejected by native constraints',()=>{
+ const data=setup([wall]);
+ data.token.constrainMovementPath=p=>[p,true];
+ assert.equal(run(data),null);
+ data.token.constrainMovementPath=p=>[p,false];
+ assert.ok(run(data));
+});

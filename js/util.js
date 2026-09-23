@@ -212,3 +212,19 @@ export function getNativeMovementWaypoint(position, tokenData) {
 	return {x: center.x - pivot.x, y: center.y - pivot.y,
 		elevation, width, height, depth, shape, level, action};
 }
+
+// Segment checks can have different wall-boundary offsets than a complete path.
+// Validate the returned route as a whole before giving it to a movement caller.
+export function nativeRouteIsComplete(positions, tokenData) {
+	const token = tokenData.token;
+	if (!canvas.scene?.levels || typeof token?.constrainMovementPath !== "function") return true;
+	const waypoints = positions.map(position => getNativeMovementWaypoint(position, tokenData));
+	const expected = waypoints.at(-1);
+	const [path, constrained] = token.constrainMovementPath(waypoints, {
+		preview: false, ignoreWalls: false, ignoreCost: true, history: false
+	});
+	const last = path.at(-1);
+	return !constrained && !!last && path.length >= waypoints.length
+		&& last.x === Math.round(expected.x) && last.y === Math.round(expected.y)
+		&& last.elevation === expected.elevation && last.level === expected.level;
+}
