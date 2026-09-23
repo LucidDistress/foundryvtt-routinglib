@@ -45,4 +45,33 @@ test('hooks scope wall changes to active scene and invalidate dotted grid update
   const previous=calls.invalidate;event(doc('other'));assert.equal(calls.invalidate,previous);
   event(doc('active'));assert.equal(calls.invalidate,previous+1);
  }
+ // Actor-derived movement rules: linked actors, owned items/effects and synthetic actors.
+ canvas.ready=true;
+ const actor={documentName:'Actor',id:'hero',uuid:'Actor.hero',isToken:false};
+ const synthetic={documentName:'Actor',id:'hero',uuid:'Scene.active.Token.a.Actor.hero',isToken:true};
+ canvas.tokens={placeables:[{actor},{actor:synthetic}]};
+ const check=(event,doc,expected)=>{
+  const before={...calls};hooks.get(event)(doc,{});
+  assert.equal(calls.invalidate,before.invalidate+expected,event);
+  assert.equal(calls.initialize,before.initialize+expected,event+' cache');
+ };
+ for(const operation of ['create','update','delete']){
+  check(operation+'Actor',actor,1);
+  check(operation+'Actor',{...actor,id:'absent',uuid:'Actor.absent'},0);
+  check(operation+'Item',{documentName:'Item',parent:actor},1);
+  check(operation+'Item',{documentName:'Item'},0); // World/compendium item.
+  check(operation+'ActiveEffect',{documentName:'ActiveEffect',parent:actor},1);
+  check(operation+'ActiveEffect',{documentName:'ActiveEffect',parent:{documentName:'Item',parent:synthetic}},1);
+  check(operation+'Actor',{...synthetic},1); // Same synthetic UUID, different instance.
+  check(operation+'Actor',{...synthetic,uuid:'Scene.other.Token.b.Actor.hero'},0);
+  check(operation+'ActorDelta',{parent:{parent:{id:'active'}}},1);
+  check(operation+'ActorDelta',{parent:{parent:{id:'other'}}},0);
+ }
+ // Base actor changes can affect data inherited by an unlinked actor.
+ canvas.tokens.placeables=[{actor:synthetic}];
+ check('updateActor',actor,1);
+ canvas.ready=false;
+ check('updateActor',synthetic,0);
+ check('updateActorDelta',{parent:{parent:{id:'active'}}},0);
+
 });

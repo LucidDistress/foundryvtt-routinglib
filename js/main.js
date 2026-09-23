@@ -157,12 +157,45 @@ function initializeIfReady() {
 	// resume them with a changed document and stale collision context.
 	Hooks.on("updateToken", (token, changes) => {
 		if (token.parent?.id !== canvas.scene?.id) return;
-		const fields = ["width", "height", "depth", "shape", "elevation", "level", "movementAction", "flags"];
+		const fields = ["width", "height", "depth", "shape", "elevation", "level", "movementAction", "flags", "actorId", "actorLink", "delta"];
 		if (Object.keys(changes).some(key => fields.includes(key.split(".")[0]))) {
 			invalidateJobs();
 			initializeCaches();
 		}
 	});
+	// Systems and modules can derive movement rules from arbitrary actor, item
+	// or effect data. Invalidate conservatively, but only for actors on this canvas.
+	const onActorContextChange = document => {
+		if (!canvas?.ready) return;
+		let actor = document;
+		while (actor && actor.documentName !== "Actor") actor = actor.parent;
+		if (!actor) return;
+		const present = canvas.tokens?.placeables?.some(token => {
+			const candidate = token.actor;
+			if (!candidate) return false;
+			if (candidate === actor) return true;
+			if (candidate.uuid && actor.uuid && candidate.uuid === actor.uuid) return true;
+			// Base actor changes can also affect inherited synthetic actor data.
+			// A synthetic edit must never match another token by base ID alone.
+			return !actor.isToken && actor.id != null && candidate.id === actor.id;
+		});
+		if (!present) return;
+		invalidateJobs();
+		initializeCaches();
+	};
+	for (const name of ["Actor", "Item", "ActiveEffect"]) {
+		for (const operation of ["create", "update", "delete"]) {
+			Hooks.on(`${operation}${name}`, onActorContextChange);
+		}
+	}
+	// Synthetic actor edits can arrive as ActorDelta updates on an unlinked token.
+	for (const operation of ["create", "update", "delete"]) {
+		Hooks.on(`${operation}ActorDelta`, delta => {
+			if (!canvas?.ready || !canvas.scene?.id || delta.parent?.parent?.id !== canvas.scene.id) return;
+			invalidateJobs();
+			initializeCaches();
+		});
+	}
 	for (const event of ["createLevel", "updateLevel", "deleteLevel"]) {
 		Hooks.on(event, level => {
 			if (level.parent?.id !== canvas.scene?.id) return;

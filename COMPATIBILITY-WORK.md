@@ -190,3 +190,24 @@ Remaining: live action/door/surface and large-token placement checks, full swept
 footprint clearance, vertical routes, gridless native levels/terrain, actor/item/effect
 cost invalidation, performance profiling and the deferred WASM rebuild. No live
 scene was changed; nothing was deployed or marked as a verified v14 release.
+
+## Batch 9: actor-derived movement invalidation
+- Discard pending routes and rebuild caches when an active-scene actor or its owned
+  items/effects change. Follow effect parents through items to the owning actor.
+- Match synthetic actors by identity/UUID; base actor updates also invalidate tokens
+  that inherit that actor's data. Synthetic edits do not match unrelated tokens merely
+  because they share a base actor ID.
+- Handle ActorDelta create/update/delete on the active scene and token changes to
+  actorId, actorLink or delta. Ignore off-scene actors, standalone items and actor
+  events while the canvas is not ready.
+- Use conservative invalidation for all actor/item/effect fields: system and module
+  movement rules can depend on arbitrary data. An unrelated edit to an on-scene actor
+  can therefore cancel pending routes too. Callers receive null and may request again.
+
+Validation: all 27 JavaScript tests pass, with the hook suite extended across actor,
+item, effect and delta lifecycle events, linked/synthetic identity, nested effects,
+off-scene changes and canvas readiness. Syntax and diff checks pass. Actual Foundry
+hook ordering and system-derived movement changes still require live validation.
+No scene data changed. This batch supersedes the earlier actor-cost invalidation gap;
+vertical routing, footprint clearance, gridless native support and WASM/live testing
+remain outstanding.
