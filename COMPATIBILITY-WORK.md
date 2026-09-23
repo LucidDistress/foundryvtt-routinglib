@@ -1,9 +1,10 @@
 # RoutingLib modernization: work in progress
 
-This checkout is not yet a verified Foundry v14 release. Do not deploy it as one.
-The removed `verified: 11` claim is intentional; the new public grid calls require
-v12 or later. Runtime verification remains pending. Release URLs are unchanged
-until a release is actually built and published in this fork.
+Current test candidate: **1.2.0-beta.1**, targeting Foundry v14. All changes below
+are implementation history; later batches supersede earlier remaining-work notes.
+A Linux CI build has passed native Rust, generated WASM and archive checks. Live
+Foundry/system/Rideable verification remains pending; no `verified` claim is set.
+See TESTING-V14.md for the installation and acceptance matrix. Nothing is deployed.
 
 ## Implemented
 - Remove unsupported allowBugReporter manifest field.
@@ -24,18 +25,14 @@ until a release is actually built and published in this fork.
   absent optional localization files correctly when packaging.
 
 ## Remaining before release
-- Validate the native terrain measurement integration in live Foundry and finish
-  token-footprint collision handling. Gridded token wall checks delegate
-  to native movement constraints with action, level and height context; full v14
-  movement compatibility is not yet established.
-- Verify diagonal rules in Foundry after the isolated distance regression suite.
-- Complete the WASM rebuild and runtime validation for the Rust distance fixes.
-- Test hex token sizes/orientations, narrow passages, one-way walls, doors,
-  scene switching, and Rideable in Foundry.
-- Extend native level/directional-wall handling to the Rust gridless engine.
-- Rebuild WASM and inspect the final release archive; no generated binary is borrowed
-  from another fork. Rust/wasm-pack must be installed to perform that build.
-- Update release version/URLs and verified core only after runtime validation.
+- Run the live matrix in TESTING-V14.md, including large/hex token placement, directional
+  walls, levels, native terrain, custom actions, cancellation and Rideable.
+- Profile native gridless candidate graphs and full-prefix terrain measurement on large maps.
+- Evaluate any custom history-dependent movement rules used by consumers; these are not
+  represented by the current search state.
+- Publish a fork release and set its real update/download URLs only after validation.
+- Vertical routes and extra swept-footprint clearance are outside the current 2D API,
+  not features advertised as complete by this beta.
 
 ## Validation
 Run `node --test tests/regression.test.mjs`.
@@ -286,3 +283,14 @@ over the legacy Rust graph's speed.
 Validation: 39 JS tests pass, including segment-safe/full-path-constrained cases and
 native gridless result rejection. Native collision and custom movement behavior
 still need live Foundry verification.
+
+## Batch 15: v14 test candidate
+- Set beta version and v14-only support metadata, retaining the original author credits.
+  Remove upstream automatic update/download URLs and point project links at this fork.
+- Package the live test guide and a read-only smoke helper that validates actual native
+  constraints and movement costs without changing the world.
+- Refresh capability documentation to distinguish native v14 gridless support from the
+  legacy WASM engine and spell out the remaining live tests and API limitations.
+
+No deployment or public release was performed. Final commit CI must pass before using
+its artifact; live test results determine whether a verified release is appropriate.

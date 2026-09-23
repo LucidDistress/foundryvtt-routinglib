@@ -1,3 +1,11 @@
+## 1.2.0-beta.1 (v14 test candidate)
+- Native level/action-aware movement constraints and terrain measurement for gridded routes.
+- Native gridless routing around level edges and region boundaries, with directed wall checks.
+- Correct diagonal rules, exact budgets, stable endpoints, and complete-route validation.
+- Actor/item/effect and geometry invalidation; isolated scheduler errors and cancellation.
+- Rust distance fixes and explicit WASM ownership; fresh binary validation in Linux CI.
+- V14-only beta metadata, fork URLs, and a read-only Foundry smoke test. Live verification pending.
+
 ## 1.1.0
 ### Performance
 - Increased the speed of the gridless pathfinder (thanks to MavethGH for suggesting this improved algorithm!)

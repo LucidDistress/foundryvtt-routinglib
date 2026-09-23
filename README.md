@@ -4,13 +4,25 @@ Routinglib is a library module that offers pathfinding capabilities to other mod
 ## Should I install this module?
 This module does not provide any user-facing features on it's own. Only install this module either if another module you're using has declared this module as a dependency or if another module you're using indicates that it will unlock specific features if routinglib is installed. If neihter of those apply to you, there is nothing to gain by installing routinglib.
 
-## Capabilities
-The following table lists the capabilities and limitations of routinglib with respect to grid types and difficult terrain. Note that you need to install Terrain Ruler if you would like routinglib to take difficult terrain into account.
+## V14 test build
 
-&nbsp; | Square or Hex grids | Gridless
--|-|-
-Without difficult terrain | <ul><li>Fast<li>Will always find the shortest possible path, if a path exists<li>Can only calculate paths where each waypoint is snapped to the grid<li>Tokens of even size cannot squeeze through a 1 square hallway</ul> | <ul><li>Fast on small scenes, slow on scenes with thousands of walls<li>Will find paths that are close to the shortest possible path<li>Tokens aren't able to squeeze through hallways smaller than they are themselves</ul>
-With difficult terrain | <ul><li>Somewhat fast for 1x1 tokens, getting increasingly slower with token size<li>Will always find the shortest possible path, if a path exists<li>Can only calculate paths where each waypoint is snapped to the grid<li>Tokens of even size cannot squeeze through a 1 square hallway</ul> | Currently unsupported, terrain will be ignored on gridless scenes
+This fork's `1.2.0-beta.1` targets Foundry v14. It is ready for controlled integration
+testing, not yet declared `verified`. Download a successful **Validate routinglib**
+workflow artifact from this fork and follow [TESTING-V14.md](TESTING-V14.md).
+No release/update URL is advertised until a fork release is published; this prevents
+an update from silently replacing the fork with the old upstream package.
+
+## Capabilities
+
+| Mode | Collision and cost handling | Limits |
+|---|---|---|
+| Square/hex token routes | Native level, action, wall and terrain APIs; scene diagonal rules | Grid anchors; same elevation and level; custom history-dependent costs unsupported |
+| V14 gridless token routes | Native directed collision and full-route terrain costs; candidates around walls and regions | Approximate continuous paths; large scenes need performance testing |
+| Tokenless routes | Native level wall checks; geometric costs | No token-specific action or terrain costs |
+
+No mode plans vertical transitions or adds a swept-footprint clearance guarantee
+beyond Foundry's own collision rules. Planning never moves tokens or executes region
+entry scripts. See the test guide for large-token and Rideable checks.
 
 ## Using routinglib in a module
 *This section is intended for module authors that would like to integrate routinglib's pathfinding capabilities into their modules. If you aren't a module author, you can stop reading here*
@@ -128,8 +140,9 @@ the WASM assets to include this fix; an older binary retains its previous behavi
 ### Optional gridless engine
 
 After `routinglib.ready`, call `routinglib.isGridlessAvailable()` to check whether
-WASM loaded. If its assets are missing or fail to initialize, the gridded API still
-loads and gridless requests fail with an explicit error. Install a complete release
+a gridless engine is available for the current scene. V14 uses the native JavaScript
+graph and does not need WASM. Legacy scenes require WASM; if it fails to load, their
+gridless requests fail explicitly while gridded routing remains available. Install a complete release
 and reload Foundry to restore gridless support. `calculatePath` reports invalid
 requests as rejected promises; `calculatePathBlocking` throws synchronously.
 
@@ -143,7 +156,8 @@ Relevant token dimension/elevation/level edits and native level changes invalida
 pending requests with `null`, allowing callers to request a new route.
 
 These are same-level wall checks. Native terrain costs are integrated for gridded token routes (see below). Vertical
-travel, full footprint clearance and native gridless level support remain pending.
+travel and extra footprint clearance remain outside this two-dimensional API. V14
+gridless routing uses native levels and movement rules as well.
 
 ### Rust and WASM validation
 
@@ -156,14 +170,23 @@ suite, which uses simulated WASM boundaries.
 
 ### Native terrain measurement (development)
 
-Token-based gridded searches use v14's native terrain-path and movement measurement
+Token-based searches use v14's native terrain-path and movement measurement
 APIs when available. Reported `cost` and `maxDistance` include native movement costs;
 regions represented by infinite movement cost are impassable. The full candidate
 route is measured to preserve alternating-diagonal history. Native terrain routes
 retain their waypoints even with interpolation enabled.
 
-`ignoreTerrain: true` bypasses terrain measurement. Tokenless and gridless requests
-do not use native terrain costs. Region and RegionBehavior edits invalidate pending
+`ignoreTerrain: true` bypasses terrain measurement. Tokenless requests do not use native terrain costs. V14 gridless token requests also
+use native measurement, through their native visibility graph. Region and RegionBehavior edits invalidate pending
 requests with `null`; callers can request a new route. Planning does not move tokens
 or execute region-entry scripts. Live Foundry correctness/performance testing remains
 required, particularly for large tokens and custom movement actions/cost rules.
+
+### Request lifetime
+
+Coordinates are copied at request creation. Changes to active-scene levels, regions,
+token movement context, or on-scene actors/items/effects can resolve pending requests
+with `null`; request again after the change. Explicit successful cancellation retains
+the historical unresolved-promise behavior. Errors reject asynchronous calls and throw
+from blocking calls. Grid coordinates must be integer cells inside the canvas; gridless
+coordinates are center points in pixels.

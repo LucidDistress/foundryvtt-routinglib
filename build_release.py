@@ -14,7 +14,7 @@ wasm_pack = shutil.which("wasm-pack") or Path("~/.cargo/bin").expanduser() / ("w
 if not Path(wasm_pack).is_file():
 	raise SystemExit("wasm-pack is required to build a release; install the Rust toolchain and wasm-pack first.")
 
-root_files = ["module.json", "README.md", "CHANGELOG.md", "LICENSE"]
+root_files = ["module.json", "README.md", "CHANGELOG.md", "LICENSE", "TESTING-V14.md", "tools/foundry-smoke.mjs"]
 wasm_files = ["gridless_pathfinding_bg.wasm", "gridless_pathfinding.js"]
 output_dir = Path("artifact")
 copy_everything_directories = ["js"]
