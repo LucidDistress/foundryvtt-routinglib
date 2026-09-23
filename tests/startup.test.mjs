@@ -35,7 +35,7 @@ test('startup publishes gridded API once on WASM failure and handles teardown an
   code=`const s=globalThis.__startupState;
   const initializeBackground=()=>{},createAsyncPathfinder=()=>{s.scheduled++;return Promise.resolve({cost:5});},cancelJob=()=>false,invalidateJobs=()=>s.cleared++;
   const cache={getLevelIndexForElevation:e=>e},GriddedCache={getSnapPointIndexForTokenData:()=>0},initializeCaches=()=>{},wipeCaches=()=>{},disposeCaches=()=>{};
-  const GriddedPathfinder=class{},GridlessPathfinder=class{},initGridlessPathfinding=()=>Promise.reject(new Error('missing wasm'));
+  const NativeGridlessPathfinder=class{constructor(){s.native=(s.native??0)+1;}},GriddedPathfinder=class{},GridlessPathfinder=class{},initGridlessPathfinding=()=>Promise.reject(new Error('missing wasm'));
   const getAltOrientationFlagForToken=()=>false,getHexTokenSize=()=>1,isModuleActive=()=>false;
   `+code;
   await import(url(code));await once.get('ready')();await new Promise(resolve=>setImmediate(resolve));
@@ -45,8 +45,11 @@ test('startup publishes gridded API once on WASM failure and handles teardown an
   let promise;assert.doesNotThrow(()=>{promise=api.calculatePath({x:NaN,y:0},{x:1,y:0});});
   await assert.rejects(promise,/finite numbers/);
   canvas.grid.type=0;await assert.rejects(api.calculatePath({x:0,y:0},{x:1,y:0}),/gridless engine is unavailable/);
+  canvas.scene.levels=new Map([['ground',{}]]);canvas.level={id:'ground'};
+  assert.equal(api.isGridlessAvailable(),true);
+  await api.calculatePath({x:0,y:0},{x:1,y:0});assert.equal(state.native,1);
   canvas.ready=false;hooks.get('canvasTearDown')();assert.equal(state.cleared,1);
   await assert.rejects(api.calculatePath({x:0,y:0},{x:1,y:0}),/ready scene/);
-  assert.equal(state.scheduled,1);
+  assert.equal(state.scheduled,2);
  } finally {console.warn=originalWarn;}
 });

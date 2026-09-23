@@ -2,6 +2,8 @@ import {initializeBackground, createAsyncPathfinder, cancelJob, invalidateJobs} 
 import {cache, GriddedCache, initializeCaches, wipeCaches, disposeCaches} from "./cache.js";
 import {GriddedPathfinder, GridlessPathfinder} from "./pathfinder.js";
 
+import {NativeGridlessPathfinder} from "./native-gridless.js";
+
 import initGridlessPathfinding from "./gridless.js";
 import {getAltOrientationFlagForToken, getHexTokenSize, isModuleActive} from "./util.js";
 
@@ -69,6 +71,7 @@ function initializePathfinder(from, to, options) {
 
 	const levelIndex = cache.getLevelIndexForElevation(elevation);
 	if (canvas.grid.type === CONST.GRID_TYPES.GRIDLESS) {
+		if (canvas.scene.levels) return new NativeGridlessPathfinder(from, to, tokenData, options);
 		if (!wasmAvailable) throw new Error("RoutingLib gridless engine is unavailable; install the WASM assets and reload Foundry.");
 		const tokenSize = Math.max(tokenData.width, tokenData.height);
 		// Reacquire the graph after wall changes: resetting the Rust search alone
@@ -138,7 +141,7 @@ function initializeIfReady() {
 	initialized = true;
 	initializeCaches();
 	initializeBackground();
-	window.routinglib = {calculatePath, calculatePathBlocking, cancelPathfinding, isGridlessAvailable: () => wasmAvailable};
+	window.routinglib = {calculatePath, calculatePathBlocking, cancelPathfinding, isGridlessAvailable: () => !!canvas?.scene?.levels || wasmAvailable};
 
 	const clearScene = () => {
 		invalidateJobs();

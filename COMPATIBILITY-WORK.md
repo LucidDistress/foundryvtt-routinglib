@@ -250,3 +250,27 @@ WASM runtime suite; simulated boundaries alone do not establish binary compatibi
 
 The Linux runner avoids the unavailable Windows build environment without changing
 local execution policy. A successful CI build is required before live testing.
+
+## Batch 13: native v14 gridless routing
+- Route v14 gridless requests through a native visibility graph instead of the
+  legacy Rust wall snapshot. Generate candidates around the selected level's native
+  edges and region polygon vertices; check directed segments with Foundry collision.
+- Use native token movement costs, including impassable regions, and preserve pixel
+  or scene-unit budgets. Tokenless routes use geometric cost and native wall checks.
+- Keep action/level context per request, rebuild geometry on resets and process one
+  candidate segment per step so the scheduler can yield between collision checks.
+- v14 gridless routing remains available without WASM; older scene APIs retain the
+  tested WASM engine. No native geometry or live documents are modified.
+
+Validation: 37 JS tests pass. Native-gridless cases cover wall detours, exact budgets,
+units, levels, direction, teleport, impassable terrain, reset ownership and invalid
+inputs. Startup tests verify v14 selects this engine even when WASM is unavailable.
+The Linux CI run for c25cf0c also passed native Rust tests, a fresh WASM build and
+runtime/ZIP checks, resolving the earlier local build blocker.
+
+Limits: candidate sampling approximates continuous routes and is not a proof that
+no route exists. Full-prefix terrain costs must be nonnegative and position-dependent;
+custom history-dependent rules remain unsupported. Native collision governs token
+clearance (no additional swept-footprint guarantee). Vertical routes are outside the
+2D API. Large scenes need live profiling; the new implementation favors correctness
+over the legacy Rust graph's speed.
