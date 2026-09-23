@@ -294,3 +294,10 @@ still need live Foundry verification.
 
 No deployment or public release was performed. Final commit CI must pass before using
 its artifact; live test results determine whether a verified release is appropriate.
+
+## Batch 16: native-check scheduler responsiveness
+- Check the time-slice deadline between individual search steps. Expensive native
+  collision/terrain checks no longer force a full batch of twenty before yielding.
+  A single synchronous Foundry call remains indivisible and can exceed the slice.
+- A deterministic clock test verifies yielding with a pending route and subsequent
+  completion/cleanup. All 40 JavaScript tests pass.

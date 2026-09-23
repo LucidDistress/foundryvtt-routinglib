@@ -72,7 +72,9 @@ function asyncPathfindingTask() {
 		let failed = false;
 		let error;
 		try {
-			for (let i = 0; i < 20 && result === undefined; i++) result = job.pathfinder.step();
+			// Native movement checks can be expensive. Yield between steps, not
+			// only after a fixed batch of twenty checks. A single step is indivisible.
+			for (let i = 0; i < 20 && result === undefined && Date.now() < deadline; i++) result = job.pathfinder.step();
 			if (result !== undefined && result !== null) result = job.pathfinder.postProcessResult(result);
 		} catch (e) {
 			failed = true;

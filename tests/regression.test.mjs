@@ -97,3 +97,17 @@ test('cancellation removes a job even when cleanup throws and preserves promise 
  const good=scheduler.createAsyncPathfinder({step:()=>1,postProcessResult:x=>x,free(){}});
  assert.equal(await good,1);assert.equal(steps,0);assert.equal(frees,1);
 });
+
+test('scheduler yields between expensive native checks instead of finishing the whole batch',async()=>{
+ const originalNow=Date.now,originalWindow=globalThis.window;
+ let now=0,steps=0,frees=0;const timers=[];
+ Date.now=()=>now;
+ globalThis.window={setTimeout:f=>{timers.push(f);return timers.length;},clearTimeout(){}};
+ try {
+  const scheduler=await load('background.js');scheduler.initializeBackground();
+  const result=scheduler.createAsyncPathfinder({step(){steps++;now+=6;return steps===3?7:undefined;},postProcessResult:x=>x,free(){frees++;}});
+  timers.shift()();
+  assert.equal(steps,2);assert.equal(frees,0);assert.equal(timers.length,1);
+  timers.shift()();assert.equal(await result,7);assert.equal(frees,1);
+ } finally {Date.now=originalNow;globalThis.window=originalWindow;}
+});
