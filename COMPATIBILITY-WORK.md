@@ -227,3 +227,14 @@ gridless rebuild coordinates and validation before graph expansion. Existing cac
 bounds tests exercise the actual validation rules. Syntax and diff checks pass.
 WASM execution and live Foundry/Rideable validation remain pending. This batch does
 not implement vertical routing, gridless native terrain or full footprint clearance.
+
+## Batch 11: WASM result ownership
+- Copy Rust-backed result points into plain coordinates and release all point wrappers
+  before returning a route, including when coordinate reads or cleanup fail.
+- Transfer ownership to a replacement search before releasing the old search during
+  reset. Cleanup failures no longer lose the replacement or retry a consumed handle.
+- Detach search handles before freeing them; repeated free calls do nothing.
+
+Validation: 32 JavaScript tests pass, including wrapper cleanup, failing getters,
+cleanup failure isolation and reset ownership. Actual rebuilt bindings still need the
+WASM runtime suite; simulated boundaries alone do not establish binary compatibility.

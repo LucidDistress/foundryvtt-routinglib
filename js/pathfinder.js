@@ -222,8 +222,9 @@ export class GridlessPathfinder {
 		if (this.getGraph) {
 			// Construct the replacement first, so failure leaves a valid handle to free.
 			const replacement = GridlessPathfinding.initializePathfinder(this.from, this.to, this.getGraph(), this.maxDistance);
-			GridlessPathfinding.dropPathfinder(this.pathfinder);
+			const previous = this.pathfinder;
 			this.pathfinder = replacement;
+			GridlessPathfinding.dropPathfinder(previous);
 		} else GridlessPathfinding.resetPathfinder(this.pathfinder);
 	}
 
@@ -232,11 +233,24 @@ export class GridlessPathfinder {
 	}
 
 	postProcessResult(result) {
-		// Coordinates remain pixels; only distance and budget units are converted.
-		return {...result, cost: result.cost * this.unitsPerPixel};
+		// wasm-bindgen points own Rust allocations. Do not expose their lifetime
+		// to callers: copy coordinates and release every wrapper, even on failure.
+		try {
+			return {path: result.path.map(point => ({x: point.x, y: point.y})),
+				cost: result.cost * this.unitsPerPixel};
+		} finally {
+			let cleanupError;
+			for (const point of result.path) {
+				try { point.free?.(); } catch (error) { cleanupError ??= error; }
+			}
+			if (cleanupError) throw cleanupError;
+		}
 	}
 
 	free() {
-		GridlessPathfinding.dropPathfinder(this.pathfinder);
+		if (this.pathfinder == null) return;
+		const handle = this.pathfinder;
+		this.pathfinder = null;
+		GridlessPathfinding.dropPathfinder(handle);
 	}
 }

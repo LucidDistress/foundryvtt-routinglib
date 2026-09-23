@@ -88,7 +88,7 @@ test('gridless scene units convert budgets and costs, retain pixel coordinates o
  assert.deepEqual(p.postProcessResult({path:[from,to],cost:100}),{path:[from,to],cost:5});
  p.reset();assert.equal(calls[1].max,100);assert.equal(calls[1].graph,'new');
  const legacy=new GridlessPathfinder('g',from,to,{maxDistance:5});
- assert.equal(calls.at(-1).max,5);assert.equal(legacy.postProcessResult({cost:100}).cost,100);
+ assert.equal(calls.at(-1).max,5);assert.equal(legacy.postProcessResult({path:[],cost:100}).cost,100);
  assert.throws(()=>new GridlessPathfinder('g',from,to,{gridlessDistanceUnits:'feet'}),RangeError);
 });
 
@@ -176,4 +176,32 @@ test('both grid endpoints are validated before graph expansion',()=>{
   assert.throws(()=>new GriddedPathfinder(0,0,{x:99,y:0},{x:0,y:0},null,{width:1,height:1},{}),/outside canvas/);
   assert.equal(validated.length,1);assert.equal(expanded,0);
  } finally {cache.validatePosition=originalValidate;cache.getInitializedNode=originalGet;}
+});
+
+test('gridless results release all WASM points and return independently owned coordinates',()=>{
+ const p=new GridlessPathfinder('g',{x:0,y:0},{x:1,y:1},{});
+ const freed=[];
+ const points=[{x:0,y:0,free(){freed.push(0);this.x=999;}},{x:1,y:1,free(){freed.push(1);this.x=999;}}];
+ assert.deepEqual(p.postProcessResult({path:points,cost:2}),{path:[{x:0,y:0},{x:1,y:1}],cost:2});
+ assert.deepEqual(freed,[0,1]);
+ const broken=[{get x(){throw new Error('coordinate failure');},free(){freed.push(2);}},{x:1,y:1,free(){freed.push(3);}}];
+ assert.throws(()=>p.postProcessResult({path:broken,cost:2}),/coordinate failure/);
+ assert.deepEqual(freed,[0,1,2,3]);
+ const cleanup=[{x:0,y:0,free(){throw new Error('free failure');}},{x:1,y:1,free(){freed.push(4);}}];
+ assert.throws(()=>p.postProcessResult({path:cleanup,cost:2}),/free failure/);
+ assert.equal(freed.at(-1),4);
+ p.free();
+});
+
+test('gridless reset cleanup failure retains the replacement and never frees the old handle twice',()=>{
+ const engine=globalThis.__distanceWasm,drop=engine.dropPathfinder;
+ const p=new GridlessPathfinder('old',{x:0,y:0},{x:1,y:1},{},()=> 'new');
+ const old=p.pathfinder,freed=[];
+ engine.dropPathfinder=h=>{freed.push(h);if(h===old)throw new Error('old cleanup');};
+ try {
+  assert.throws(()=>p.reset(),/old cleanup/);
+  const replacement=p.pathfinder;assert.notEqual(replacement,old);
+  p.free();p.free();
+  assert.deepEqual(freed,[old,replacement]);
+ } finally {engine.dropPathfinder=drop;}
 });
