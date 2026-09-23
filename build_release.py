@@ -26,7 +26,7 @@ rust_dir = Path("rust")
 build_dir_tmp = tempfile.TemporaryDirectory()
 build_dir = Path(build_dir_tmp.name)
 
-with open("module.json", "r") as file:
+with open("module.json", "r", encoding="utf-8") as file:
 	manifest = json.load(file)
 
 zip_root = PurePath(f'{manifest["id"]}')
@@ -37,12 +37,12 @@ result = subprocess.run([wasm_pack, "build", "--target", "web", "--out-dir", bui
 if result.returncode != 0:
 	raise Exception("Wasm build failed")
 
-# Hotfix for broken js generated for wall-height
-with open(build_dir / "gridless_pathfinding.js", "r") as broken_js_file:
-	broken_js = broken_js_file.read()
-broken_js = broken_js.replace("const ret = getObject(arg0).wall-height;", "const ret = getObject(arg0)['wall-height'];")
-with open(build_dir / "gridless_pathfinding.js", "w") as broken_js_file:
-	broken_js_file.write(broken_js)
+# Validate the freshly generated binary before packaging it. Never publish an
+# archive whose Rust source passed tests but whose JS/WASM boundary was not run.
+node = shutil.which("node")
+if not node:
+	raise SystemExit("Node.js is required to validate the generated WASM bindings.")
+subprocess.run([node, root / "tools/test-wasm.mjs", build_dir], check=True)
 
 output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -62,4 +62,11 @@ with zipfile.ZipFile(output_dir / filename, mode="w", compression=zipfile.ZIP_DE
 	for f in wasm_files:
 		archive.write(build_dir / f, arcname=zip_root / wasm_dir / f)
 
-print(f"Successfully built {output_dir / filename}")
+with zipfile.ZipFile(output_dir / filename) as archive:
+	assert archive.testzip() is None, "Release archive failed its CRC check"
+	required = [str(zip_root / f).replace("\\", "/") for f in root_files]
+	required += [f"{zip_root}/wasm/{f}" for f in wasm_files]
+	assert all(name in archive.namelist() for name in required), "Missing release assets"
+	assert json.loads(archive.read(f"{zip_root}/module.json")) == manifest
+
+print(f"Successfully built and validated {output_dir / filename}")

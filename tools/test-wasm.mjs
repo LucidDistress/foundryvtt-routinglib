@@ -8,8 +8,8 @@ if (!process.argv[2]) throw new Error('Provide the generated WASM directory.');
 const directory=resolve(process.argv[2]);
 const engine=await import(pathToFileURL(join(directory,'gridless_pathfinding.js')));
 await engine.default({module_or_path:await readFile(join(directory,'gridless_pathfinding_bg.wasm'))});
-function solve(walls,from,to,budget) {
- const graph=engine.initializeGraph(walls,2,0,false);
+function solve(walls,from,to,budget,enableHeight=false,elevation=0) {
+ const graph=engine.initializeGraph(walls,2,elevation,enableHeight);
  let search;
  try { search=engine.initializePathfinder(from,to,graph,budget); }
  finally { engine.freeGraph(graph); }
@@ -37,4 +37,9 @@ const measured=detour.path.slice(1).reduce((n,p,i)=>n+Math.hypot(p.x-detour.path
 assert.ok(Math.abs(detour.cost-measured)<1e-10);
 assert.ok(solve([wall],from,end,detour.cost));
 assert.equal(solve([wall],from,end,detour.cost-0.000001),null);
-console.log('WASM runtime checks passed: budgets, detours, costs, and graph ownership.');
+// Exercise the generated property accessor for a hyphenated flag name. Older
+// bindings needed a text hotfix; current wasm-bindgen must generate it correctly.
+const elevatedWall={document:{...wall.document,flags:{'wall-height':{bottom:10,top:20}}}};
+assert.equal(solve([elevatedWall],from,end,6,true,0).cost,6);
+assert.equal(solve([elevatedWall],from,end,6,true,15),null);
+console.log('WASM runtime checks passed: budgets, detours, costs, height flags, and graph ownership.');

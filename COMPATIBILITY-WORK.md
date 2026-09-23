@@ -238,3 +238,15 @@ not implement vertical routing, gridless native terrain or full footprint cleara
 Validation: 32 JavaScript tests pass, including wrapper cleanup, failing getters,
 cleanup failure isolation and reset ownership. Actual rebuilt bindings still need the
 WASM runtime suite; simulated boundaries alone do not establish binary compatibility.
+
+## Batch 12: reproducible binary validation
+- Add Linux CI for JavaScript tests, locked Rust tests, a fresh WASM release build
+  and generated-binding runtime checks. Successful runs retain a test ZIP artifact;
+  they do not publish a release or deploy to Foundry.
+- Run WASM checks inside the release builder before packaging, including the actual
+  hyphenated wall-height flag accessor. Remove the obsolete generated-JS text patch.
+- Read manifest text as UTF-8 and check archive CRC, required assets and manifest data.
+- CI uses read-only repository permissions and pinned GitHub action commits.
+
+The Linux runner avoids the unavailable Windows build environment without changing
+local execution policy. A successful CI build is required before live testing.
