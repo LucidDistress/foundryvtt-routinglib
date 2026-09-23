@@ -16,8 +16,8 @@ export class GriddedPathfinder {
 	constructor(sizeIndex, levelIndex, from, to, token, tokenData, options) {
 		this.sizeIndex = sizeIndex;
 		this.levelIndex = levelIndex;
-		this.targetPos = to;
-		this.startPos = from;
+		this.targetPos = {x: to.x, y: to.y};
+		this.startPos = {x: from.x, y: from.y};
 		this.token = token;
 		this.tokenData = tokenData;
 		this.tokenShape = getTokenShapeForTokenData(tokenData);
@@ -44,6 +44,10 @@ export class GriddedPathfinder {
 		this.bestCosts = new Map();
 		this.gridWidth = Math.ceil(canvas.dimensions.width / canvas.grid.sizeX);
 		this.gridHeight = Math.ceil(canvas.dimensions.height / canvas.grid.sizeY);
+		// Validate both endpoints before expanding any collision graph. An invalid
+		// destination otherwise forces a futile search across the entire canvas.
+		cache.validatePosition(this.startPos);
+		cache.validatePosition(this.targetPos);
 		this.startNode = cache.getInitializedNode(
 			this.startPos,
 			this.sizeIndex,
@@ -204,14 +208,14 @@ export class GriddedPathfinder {
 export class GridlessPathfinder {
 	constructor(graph, from, to, options, getGraph) {
 		this.getGraph = getGraph;
-		this.from = from;
-		this.to = to;
+		this.from = {x: from.x, y: from.y};
+		this.to = {x: to.x, y: to.y};
 		this.distanceUnits = options.gridlessDistanceUnits ?? "pixels";
 		if (!["pixels", "scene"].includes(this.distanceUnits)) throw new RangeError("gridlessDistanceUnits must be pixels or scene.");
 		this.unitsPerPixel = this.distanceUnits === "scene" ? canvas.dimensions.distance / canvas.grid.size : 1;
 		if (!(this.unitsPerPixel > 0) || !Number.isFinite(this.unitsPerPixel)) throw new RangeError("Invalid scene distance scale.");
 		this.maxDistance = (options.maxDistance ?? Infinity) / this.unitsPerPixel;
-		this.pathfinder = GridlessPathfinding.initializePathfinder(from, to, graph, this.maxDistance);
+		this.pathfinder = GridlessPathfinding.initializePathfinder(this.from, this.to, graph, this.maxDistance);
 	}
 
 	reset() {

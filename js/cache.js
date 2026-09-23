@@ -76,11 +76,15 @@ export class GriddedCache extends Cache {
 		return tokenData.width % 2 | (tokenData.height % 2 << 1);
 	}
 
-	getInitializedNode(pos, sizeIndex, levelIndex, tokenData) {
+	validatePosition(pos) {
 		if (!Number.isInteger(pos.x) || !Number.isInteger(pos.y)
 			|| pos.x < 0 || pos.y < 0 || pos.x >= this.gridWidth || pos.y >= this.gridHeight) {
 			throw new RangeError("Grid coordinates must be integer cells inside the canvas.");
 		}
+	}
+
+	getInitializedNode(pos, sizeIndex, levelIndex, tokenData) {
+		this.validatePosition(pos);
 		// Snap parity alone is insufficient: a 1x1, 3x3 and fractional token
 		// can have different collision/snap behavior despite sharing that parity.
 		let tokenKey = null;

@@ -211,3 +211,19 @@ hook ordering and system-derived movement changes still require live validation.
 No scene data changed. This batch supersedes the earlier actor-cost invalidation gap;
 vertical routing, footprint clearance, gridless native support and WASM/live testing
 remain outstanding.
+
+## Batch 10: stable endpoints and early destination validation
+- Copy coordinate values into gridded and gridless searches. Mutating a caller's
+  coordinate objects no longer moves a queued destination or changes endpoints when
+  a wall edit rebuilds a graph. Fractional gridless pixel coordinates remain valid.
+- Validate both gridded endpoints before collision graph expansion, using the cache's
+  existing integer and canvas bounds checks (including hex dimensions). Previously
+  only expanded nodes were checked, so an invalid target could exhaust the whole map.
+- Invalid grid endpoints throw a RangeError through blocking calls and reject async
+  requests through the existing API error handling. No coordinate clamping is applied.
+
+Validation: 30 JavaScript tests pass, including endpoint mutation across steps/resets,
+gridless rebuild coordinates and validation before graph expansion. Existing cache
+bounds tests exercise the actual validation rules. Syntax and diff checks pass.
+WASM execution and live Foundry/Rideable validation remain pending. This batch does
+not implement vertical routing, gridless native terrain or full footprint clearance.

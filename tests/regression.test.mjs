@@ -58,7 +58,7 @@ test('exact diagonal budgets and gridless reset handle', async()=>{
  globalThis.window={};
  globalThis.canvas={grid:{type:1,sizeX:100,sizeY:100},scene:{grid:{type:1},dimensions:{distance:5}},dimensions:{width:1000,height:1000,distance:5}};
  const nodes=[{x:0,y:0,neighbors:[{x:1,y:1,isDiagonal:true}]},{x:1,y:1,neighbors:[]}];
- globalThis.__routingTestCache={getInitializedNode:pos=>nodes.find(n=>n.x===pos.x&&n.y===pos.y)};
+ globalThis.__routingTestCache={validatePosition:()=>{},getInitializedNode:pos=>nodes.find(n=>n.x===pos.x&&n.y===pos.y)};
  globalThis.__routingResetHandle=null;
  let code=await source('pathfinder.js');
  code=code.replace('import {cache, stepCollidesWithWall} from "./cache.js";', 'const cache=globalThis.__routingTestCache; const stepCollidesWithWall=()=>false;');

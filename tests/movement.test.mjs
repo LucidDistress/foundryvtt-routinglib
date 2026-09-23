@@ -8,7 +8,7 @@ globalThis.CONST={GRID_TYPES:{GRIDLESS:0,SQUARE:1},GRID_DIAGONALS:{EQUIDISTANT:0
 globalThis.window={};
 globalThis.canvas={grid:{type:1,size:100,sizeX:100,sizeY:100},scene:{grid:{type:1},dimensions:{distance:5}},dimensions:{width:800,height:800,distance:5}};
 let nodes;
-globalThis.__distanceCache={getInitializedNode:({x,y})=>nodes.get(`${x},${y}`)};
+globalThis.__distanceCache={validatePosition:()=>{},getInitializedNode:({x,y})=>nodes.get(`${x},${y}`)};
 const calls=[];
 globalThis.__distanceWasm={initializePathfinder:(from,to,graph,max)=>{calls.push({from,to,graph,max});return calls.length;},dropPathfinder:h=>calls.push({drop:h}),resetPathfinder:h=>calls.push({reset:h})};
 let code=await read('pathfinder.js');
@@ -84,7 +84,7 @@ test('gridless scene units convert budgets and costs, retain pixel coordinates o
  calls.length=0;
  const from={x:10,y:20},to={x:110,y:20};
  const p=new GridlessPathfinder('old',from,to,{maxDistance:5,gridlessDistanceUnits:'scene'},()=> 'new');
- assert.equal(calls[0].max,100);assert.equal(calls[0].from,from);
+ assert.equal(calls[0].max,100);assert.deepEqual(calls[0].from,from);
  assert.deepEqual(p.postProcessResult({path:[from,to],cost:100}),{path:[from,to],cost:5});
  p.reset();assert.equal(calls[1].max,100);assert.equal(calls[1].graph,'new');
  const legacy=new GridlessPathfinder('g',from,to,{maxDistance:5});
@@ -131,4 +131,49 @@ test('native terrain routes avoid expensive and impassable cells, preserving ful
  token.measureMovementPath=()=>({cost:NaN,diagonals:0});
  assert.throws(()=>run(from,to),/invalid movement measurement/);
  delete canvas.scene.levels;
+});
+
+test('gridded endpoints remain fixed when caller coordinates change between steps and resets',()=>{
+ board();canvas.grid.diagonals=0;
+ const from={x:0,y:0},to={x:4,y:0};
+ const p=new GriddedPathfinder(0,0,from,to,null,{width:1,height:1},{interpolate:false});
+ assert.equal(p.step(),undefined);
+ from.x=3;to.x=1;to.y=4;
+ p.reset();
+ let result;
+ for(let i=0;i<1000;i++){
+  const n=p.step();if(n!==undefined){result=n===null?null:p.postProcessResult(n);break;}
+ }
+ assert.ok(result);
+ assert.deepEqual(result.path[0],{x:0,y:0});
+ assert.deepEqual(result.path.at(-1),{x:4,y:0});
+ assert.equal(result.cost,20);
+});
+
+test('gridless graph rebuilds retain original fractional pixel endpoints',()=>{
+ calls.length=0;
+ const from={x:10.25,y:20.5},to={x:110.75,y:20.5};
+ const p=new GridlessPathfinder('old',from,to,{},()=> 'new');
+ from.x=999;to.y=999;
+ p.reset();
+ for(const call of calls.filter(c=>'graph' in c)){
+  assert.deepEqual(call.from,{x:10.25,y:20.5});
+  assert.deepEqual(call.to,{x:110.75,y:20.5});
+ }
+});
+
+test('both grid endpoints are validated before graph expansion',()=>{
+ const cache=globalThis.__distanceCache;
+ const originalValidate=cache.validatePosition,originalGet=cache.getInitializedNode;
+ let expanded=0;const validated=[];
+ cache.validatePosition=p=>{validated.push({...p});if(p.x===99)throw new RangeError('outside canvas');};
+ cache.getInitializedNode=()=>{expanded++;throw new Error('must not expand');};
+ try {
+  assert.throws(()=>new GriddedPathfinder(0,0,{x:0,y:0},{x:99,y:0},null,{width:1,height:1},{}),/outside canvas/);
+  assert.deepEqual(validated,[{x:0,y:0},{x:99,y:0}]);
+  assert.equal(expanded,0);
+  validated.length=0;
+  assert.throws(()=>new GriddedPathfinder(0,0,{x:99,y:0},{x:0,y:0},null,{width:1,height:1},{}),/outside canvas/);
+  assert.equal(validated.length,1);assert.equal(expanded,0);
+ } finally {cache.validatePosition=originalValidate;cache.getInitializedNode=originalGet;}
 });
